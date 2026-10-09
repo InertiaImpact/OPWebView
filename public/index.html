@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#06131d" />
+    <meta name="description" content="A local-first openpilot camera and telemetry viewer." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./styles.css?v=3" />
+    <title>OP WebView</title>
+  </head>
+  <body>
+    <main id="app" class="app" data-status="disconnected">
+      <section class="viewport" aria-label="openpilot road view">
+        <div class="video-backdrop" aria-hidden="true"></div>
+        <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
+        <canvas id="model-overlay" aria-label="Telemetry overlay"></canvas>
+        <div id="engagement-frame" class="engagement-frame" aria-hidden="true"></div>
+
+        <div class="topbar">
+          <div class="brand-lockup">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-name">OP WebView</span>
+            <span id="connection-pill" class="connection-pill">Offline</span>
+          </div>
+          <div class="toolbar" aria-label="Viewer controls">
+            <button id="connect-button" class="icon-button" type="button" title="Connect to a device" aria-label="Connect to a device">
+              <span aria-hidden="true">⌁</span><span class="button-label">Connect</span>
+            </button>
+            <button id="demo-button" class="icon-button" type="button" title="Toggle demo mode" aria-pressed="false">
+              <span aria-hidden="true">▶</span><span class="button-label">Demo</span>
+            </button>
+            <button id="edit-button" class="icon-button" type="button" title="Unlock widget layout" aria-pressed="false">
+              <span id="edit-icon" aria-hidden="true">🔒</span><span id="edit-label" class="button-label">Unlock</span>
+            </button>
+            <button id="install-button" class="icon-button" type="button" title="Install OP WebView" hidden>
+              <span aria-hidden="true">↓</span><span class="button-label">Install</span>
+            </button>
+            <button id="fullscreen-button" class="icon-button compact" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">⛶</button>
+          </div>
+        </div>
+
+        <section id="widget-layer" class="widget-layer" aria-label="Dashboard widgets"></section>
+
+        <section id="alert-banner" class="alert-banner" aria-live="assertive" hidden>
+          <strong id="alert-title"></strong>
+          <span id="alert-detail"></span>
+        </section>
+
+        <section id="empty-state" class="empty-state">
+          <span class="eyebrow">LOCAL CAMERA + TELEMETRY</span>
+          <h1>Your drive view,<br />in the browser.</h1>
+          <p>Connect to a comma device on this network, or preview the renderer in demo mode.</p>
+          <div class="empty-actions">
+            <button id="empty-connect" class="primary-button" type="button">Connect device</button>
+            <button id="empty-demo" class="secondary-button" type="button">View demo</button>
+          </div>
+        </section>
+
+        <aside id="edit-tray" class="edit-tray" hidden aria-label="Widget layout tools">
+          <span>Layout unlocked</span>
+          <button id="widgets-button" type="button">Widgets</button>
+          <button id="reset-layout-button" type="button">Reset</button>
+          <button id="done-editing-button" type="button">Done</button>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="connection-dialog" class="panel-dialog">
+      <form id="connection-form" method="dialog">
+        <header class="dialog-header">
+          <div>
+            <span class="eyebrow">DEVICE CONNECTION</span>
+            <h2>Find your comma</h2>
+          </div>
+          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
+        </header>
+        <p class="dialog-copy">Your device must be on the same network with <code>webrtcd</code> reachable on port 5001.</p>
+
+        <label class="field-label" for="device-host">Hostname or local IP</label>
+        <div class="host-row">
+          <input id="device-host" name="host" inputmode="url" autocomplete="url" placeholder="192.168.0.10 or comma.local" required />
+          <button id="connect-submit" class="primary-button" value="default" type="submit">Connect</button>
+        </div>
+        <p id="connection-error" class="form-error" role="alert" hidden></p>
+
+        <div class="section-heading">
+          <span>Discovered &amp; saved</span>
+          <button id="discover-button" type="button" class="text-button">Scan network</button>
+        </div>
+        <div id="device-list" class="device-list" aria-live="polite"></div>
+
+        <details class="compatibility-note">
+          <summary>Browser connection requirements</summary>
+          <p>Chrome will request local-network access. The device endpoint must also allow this page’s origin with CORS; stock <code>webrtcd</code> needs the included compatibility change.</p>
+        </details>
+      </form>
+    </dialog>
+
+    <dialog id="widget-dialog" class="panel-dialog small-dialog">
+      <form method="dialog">
+        <header class="dialog-header">
+          <div>
+            <span class="eyebrow">LAYOUT</span>
+            <h2>Visible widgets</h2>
+          </div>
+          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
+        </header>
+        <div id="widget-toggles" class="widget-toggles"></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./src/app.js?v=3"></script>
+  </body>
+</html>
