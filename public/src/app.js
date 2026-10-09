@@ -1,7 +1,7 @@
 import { TelemetryStore } from "./core/state.js";
 import { CerealAdapter } from "./core/telemetry-adapter.js";
 import { DeviceDiscovery } from "./core/device-discovery.js";
-import { WebRTCTransport } from "./core/webrtc-transport.js";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=2";
 import { ConnectionManager } from "./core/connection-manager.js";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { WidgetManager } from "./widgets/widget-manager.js";
@@ -230,9 +230,24 @@ elements.install.addEventListener("click", async () => {
 window.addEventListener("appinstalled", () => showToast("OP WebView installed for offline launch."));
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {
-    showToast("Offline caching could not be enabled in this browser.");
-  }));
+  let serviceWorkerRefreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (serviceWorkerRefreshing) return;
+    serviceWorkerRefreshing = true;
+    if (store.state.isConnected) {
+      showToast("Update ready. Reopen OP WebView after this drive.", 8000);
+      return;
+    }
+    window.location.reload();
+  });
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
+      await registration.update();
+    } catch {
+      showToast("Offline caching could not be enabled in this browser.");
+    }
+  });
 }
 
 renderDevices(discovery.saved());
