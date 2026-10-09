@@ -150,12 +150,7 @@ async function postStream(device, sdp, camera, services) {
     mode: "cors",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sdp,
-      cameras: [camera],
-      bridge_services_in: [],
-      bridge_services_out: services
-    }),
+    body: JSON.stringify(buildStreamRequest(sdp, camera, services)),
     signal: AbortSignal.timeout(35000)
   };
   options.targetAddressSpace = "local";
@@ -174,6 +169,16 @@ async function postStream(device, sdp, camera, services) {
   } catch (error) {
     throw new Error("webrtcd returned an invalid SDP answer.", { cause: error });
   }
+}
+
+export function buildStreamRequest(sdp, camera, services) {
+  return {
+    sdp,
+    cameras: [camera],
+    enabled: true,
+    bridge_services_in: [],
+    bridge_services_out: services
+  };
 }
 
 function waitForIceGathering(peer, timeoutMs) {

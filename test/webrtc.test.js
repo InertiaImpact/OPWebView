@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { preferH264, resolveBridgeServices } from "../public/src/core/webrtc-transport.js";
+import { buildStreamRequest, preferH264, resolveBridgeServices } from "../public/src/core/webrtc-transport.js";
 
 test("preferH264 moves H264 and its RTX payload before VP8", () => {
   const sdp = [
@@ -40,4 +40,15 @@ test("falls back to legacy opview cereal service names", async () => {
   assert.equal(calls, 2);
   assert.ok(services.includes("liveCalibration"));
   assert.ok(services.includes("roadCameraState"));
+});
+
+test("builds the rx-wb stream request with streaming enabled", () => {
+  const services = ["carState", "modelV2"];
+  assert.deepEqual(buildStreamRequest("offer-sdp", "road", services), {
+    sdp: "offer-sdp",
+    cameras: ["road"],
+    enabled: true,
+    bridge_services_in: [],
+    bridge_services_out: services
+  });
 });

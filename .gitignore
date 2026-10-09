@@ -4,3 +4,4 @@ coverage/
 .idea/
 .vscode/
 *.log
+.codex-remote-attachments/
