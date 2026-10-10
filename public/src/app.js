@@ -1,6 +1,6 @@
 import { TelemetryStore } from "./core/state.js?v=2";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=2";
-import { DeviceDiscovery } from "./core/device-discovery.js";
+import { DeviceDiscovery } from "./core/device-discovery.js?v=2";
 import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
 import { ConnectionManager } from "./core/connection-manager.js";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
@@ -250,10 +250,14 @@ elements.emptyConnect.addEventListener("click", openConnectionDialog);
 elements.discover.addEventListener("click", async () => {
   elements.discover.disabled = true;
   elements.discover.textContent = "Scanning…";
-  renderDevices(await discovery.scan());
-  elements.discover.disabled = false;
-  elements.discover.textContent = "Scan network";
+  try {
+    renderDevices(await discovery.scan());
+  } finally {
+    elements.discover.disabled = false;
+    elements.discover.textContent = "Scan network";
+  }
 });
+discovery.addEventListener("scanprogress", (event) => { elements.discover.textContent = event.detail; });
 elements.demo.addEventListener("click", toggleDemo);
 elements.emptyDemo.addEventListener("click", startDemo);
 elements.edit.addEventListener("click", () => toggleEditing());
