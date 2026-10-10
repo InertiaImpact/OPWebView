@@ -23,7 +23,12 @@ export class ConnectionManager extends EventTarget {
       this.switchCameraIfNeeded();
     });
     transport.addEventListener("state", (event) => {
-      if (event.detail === "failed" && !this.userClosed) this.scheduleReconnect();
+      // Retry only after a stream was previously healthy, or while continuing
+      // an existing recovery sequence. An initial negotiation failure needs to
+      // remain visible so the user can act on its specific diagnostic.
+      if (event.detail === "failed" && !this.userClosed && (this.store.state.isConnected || this.retryCount > 0)) {
+        this.scheduleReconnect();
+      }
       this.dispatchEvent(new CustomEvent("state", { detail: event.detail }));
     });
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
@@ -52,7 +57,7 @@ export class ConnectionManager extends EventTarget {
     } catch (error) {
       this.store.setConnection(false);
       this.dispatchEvent(new CustomEvent("error", { detail: error }));
-      if (!this.userClosed) this.scheduleReconnect();
+      if (!this.userClosed && this.retryCount > 0) this.scheduleReconnect();
       throw error;
     } finally {
       this.connecting = false;

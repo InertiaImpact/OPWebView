@@ -2,7 +2,7 @@ import { TelemetryStore } from "./core/state.js?v=2";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=2";
 import { DeviceDiscovery } from "./core/device-discovery.js?v=2";
 import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
-import { ConnectionManager } from "./core/connection-manager.js";
+import { ConnectionManager } from "./core/connection-manager.js?v=2";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
 import { DemoFeed } from "./demo.js?v=2";
@@ -118,7 +118,7 @@ async function connectDevice(input) {
     setConnectionStatus("connected", input.label || input.host || "Connected");
     showToast("Camera and telemetry are live.");
   } catch (error) {
-    setConnectionStatus("offline", "Retrying");
+    setConnectionStatus("offline", connection.retryCount > 0 ? "Retrying" : "Connection failed");
     elements.connectionError.dataset.kind = "error";
     elements.connectionError.textContent = error.message || "Connection failed.";
     elements.connectionError.hidden = false;
@@ -296,7 +296,8 @@ connection.addEventListener("state", (event) => {
   if (demoActive) return;
   if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
   else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
-  else if (["failed", "offline"].includes(event.detail)) setConnectionStatus("offline", "Reconnecting");
+  else if (event.detail === "failed") setConnectionStatus("offline", connection.retryCount > 0 ? "Reconnecting" : "Connection failed");
+  else if (event.detail === "offline") setConnectionStatus("offline", "Offline");
   else setConnectionStatus("disconnected", "Offline");
 });
 connection.addEventListener("progress", (event) => {
