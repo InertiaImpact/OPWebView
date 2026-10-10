@@ -20,9 +20,9 @@ The code is intentionally framework-free for the first milestone. That keeps the
 
 ## Widget extension model
 
-Each widget is a declarative entry containing an ID, title, default percentage layout, and render function. Adding a widget does not require changes to drag/resize/persistence behavior. Layouts are stored in `localStorage` and remain device-local.
+Each widget is a declarative entry containing an ID, title, visual role, and render function. Adding a widget does not require changes to drag/resize/persistence behavior. The Classic, Enhanced, and Detailed presets are immutable starting points; applying an edit creates a custom working layout. Named snapshots and the current working layout are stored in `localStorage` and remain device-local and available offline.
 
-The initial editor uses percentage coordinates so a layout survives different screen sizes and orientations. A later schema version can add named layouts, grid snapping, per-orientation profiles, opacity, and z-order without changing existing saved data.
+The editor uses percentage coordinates so a layout survives different screen sizes and orientations. The version-two persistence schema migrates the original five-widget layout without making newly added widgets unexpectedly visible.
 
 ## Discovery strategy
 

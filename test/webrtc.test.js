@@ -27,17 +27,19 @@ test("uses current cereal service names when the device exposes them", async () 
   assert.match(urls[0], /extrinsicsCalibration%2CnarrowRoadCameraState/);
   assert.ok(services.includes("extrinsicsCalibration"));
   assert.ok(services.includes("narrowRoadCameraState"));
+  assert.ok(services.includes("driverMonitoringState"));
+  assert.ok(services.includes("carControl"));
   assert.ok(!services.includes("liveCalibration"));
 });
 
 test("falls back to legacy opview cereal service names", async () => {
-  let calls = 0;
-  const services = await resolveBridgeServices({ host: "192.168.1.10", port: 5001 }, async () => {
-    calls += 1;
-    return { ok: calls === 2 };
+  let requiredCalls = 0;
+  const services = await resolveBridgeServices({ host: "192.168.1.10", port: 5001 }, async (url) => {
+    if (url.includes("extrinsicsCalibration") || url.includes("liveCalibration")) requiredCalls += 1;
+    return { ok: url.includes("liveCalibration") };
   });
 
-  assert.equal(calls, 2);
+  assert.equal(requiredCalls, 2);
   assert.ok(services.includes("liveCalibration"));
   assert.ok(services.includes("roadCameraState"));
 });

@@ -10,6 +10,16 @@ const BASE_BRIDGE_SERVICES_OUT = Object.freeze([
   "deviceState"
 ]);
 
+export const OPTIONAL_BRIDGE_SERVICES_OUT = Object.freeze([
+  "longitudinalPlanSP",
+  "liveMapDataSP",
+  "carControl",
+  "carOutput",
+  "selfdriveStateSP",
+  "onroadEvents",
+  "driverMonitoringState"
+]);
+
 // openpilot renamed these services after the native opview client was released.
 // Probe the device before creating a SubMaster because requesting even one
 // unknown service makes the entire WebRTC stream request fail.
@@ -56,7 +66,7 @@ export class WebRTCTransport extends EventTarget {
     if (generation !== this.generation) return;
 
     const services = await resolveBridgeServices(device);
-    const response = await postStream(device, peer.localDescription?.sdp || offer.sdp, camera, services);
+    const response = await postStreamWithFallback(device, peer.localDescription?.sdp || offer.sdp, camera, services);
     if (generation !== this.generation) return;
     await peer.setRemoteDescription(new RTCSessionDescription(response));
     await waitForPeerConnection(peer, 15000);
@@ -139,9 +149,55 @@ export async function resolveBridgeServices(device, fetchImpl = fetch) {
     } catch (error) {
       throw new Error("The browser could not inspect the comma service schema. Allow local-network access and add the rx-wb browser CORS patch.", { cause: error });
     }
-    if (response.ok) return services;
+    if (response.ok) {
+      const optional = await resolveOptionalServices(device, fetchImpl);
+      return [...services, ...optional];
+    }
   }
   throw new Error("This comma does not expose a compatible calibration and road-camera service pair.");
+}
+
+async function resolveOptionalServices(device, fetchImpl) {
+  const query = encodeURIComponent(OPTIONAL_BRIDGE_SERVICES_OUT.join(","));
+  const options = schemaOptions();
+  try {
+    const response = await fetchImpl(`${deviceBaseUrl(device)}/schema?services=${query}`, options);
+    if (response.ok) return [...OPTIONAL_BRIDGE_SERVICES_OUT];
+  } catch {}
+
+  const supported = [];
+  for (const service of OPTIONAL_BRIDGE_SERVICES_OUT) {
+    try {
+      const response = await fetchImpl(`${deviceBaseUrl(device)}/schema?services=${encodeURIComponent(service)}`, schemaOptions());
+      if (response.ok) supported.push(service);
+    } catch {}
+  }
+  return supported;
+}
+
+function schemaOptions() {
+  const options = {
+    method: "GET",
+    mode: "cors",
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000)
+  };
+  options.targetAddressSpace = "local";
+  return options;
+}
+
+async function postStreamWithFallback(device, sdp, camera, initialServices) {
+  let services = [...initialServices];
+  for (let attempt = 0; attempt <= OPTIONAL_BRIDGE_SERVICES_OUT.length; attempt += 1) {
+    try {
+      return await postStream(device, sdp, camera, services);
+    } catch (error) {
+      const rejected = error.rejectedService;
+      if (!rejected || !OPTIONAL_BRIDGE_SERVICES_OUT.includes(rejected)) throw error;
+      services = services.filter((service) => service !== rejected);
+    }
+  }
+  throw new Error("The comma rejected the optional telemetry service set.");
 }
 
 async function postStream(device, sdp, camera, services) {
@@ -161,7 +217,14 @@ async function postStream(device, sdp, camera, services) {
     throw new Error("The browser could not reach the stream endpoint. Allow local-network access and confirm the device has the OP WebView CORS compatibility change.", { cause: error });
   }
   const body = await response.text();
-  if (!response.ok) throw new Error(`webrtcd returned ${response.status}${body ? `: ${body}` : ""}`);
+  if (!response.ok) {
+    const error = new Error(`webrtcd returned ${response.status}${body ? `: ${body}` : ""}`);
+    try {
+      const message = String(JSON.parse(body).message || "");
+      error.rejectedService = message.match(/KeyError:\s*['\"]([^'\"]+)['\"]/)?.[1] || null;
+    } catch {}
+    throw error;
+  }
   try {
     const answer = JSON.parse(body);
     if (!answer.sdp || !answer.type) throw new Error("Incomplete SDP answer");

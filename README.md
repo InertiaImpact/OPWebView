@@ -7,8 +7,9 @@ This first milestone includes:
 - WebRTC road-camera streaming with H.264 preference
 - Telemetry parsing for the stock on-road UI services
 - Canvas-based path, lane, road-edge, and lead-vehicle rendering
-- Current speed, cruise speed, drive-state, lead, and device widgets
-- An unlock mode for dragging, resizing, hiding, restoring, and resetting widgets
+- Nineteen live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
+- Built-in Classic, Enhanced, and Detailed layouts adapted from gerrylum's OPView layouts branch
+- Named custom layouts saved locally, with recall, deletion, visibility controls, drag, resize, and preset-aware reset
 - Saved-device discovery with a `comma.local` probe and manual local-IP entry
 - Road/wide-road camera switching with the same speed hysteresis as opview
 - PWA installation, offline shell caching, standalone display, and screen wake lock
@@ -76,4 +77,4 @@ See [docs/architecture.md](docs/architecture.md) for design decisions and extens
 
 ## Attribution
 
-The protocol, state mapping, projection math, and on-road rendering behavior are adapted from [`eFiniLan/opview`](https://github.com/eFiniLan/opview) v0.1.1 and openpilot. Review [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before distribution or commercial use.
+The protocol, state mapping, projection math, and on-road rendering behavior are adapted from [`eFiniLan/opview`](https://github.com/eFiniLan/opview), including [`gerrylum/opview`](https://github.com/gerrylum/opview)'s `layouts` branch, and openpilot. Review [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before distribution or commercial use.

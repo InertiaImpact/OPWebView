@@ -8,6 +8,8 @@ Copyright (c) 2026, Rick Lan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sublicense copies, for non-commercial purposes only, subject to the conditions in the upstream license. Commercial use requires explicit written permission from the copyright holder.
 
+The Classic, Enhanced, and Detailed dashboard structure and telemetry mappings also reference the `layouts` branch maintained at <https://github.com/gerrylum/opview>.
+
 Upstream source and complete license: <https://github.com/eFiniLan/opview>
 
 ## openpilot

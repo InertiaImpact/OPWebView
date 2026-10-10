@@ -1,57 +1,11 @@
-import { displaySpeed, isCruiseSet, setSpeed } from "../core/state.js";
+import { WIDGETS } from "./widget-catalog.js";
+import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, sanitizeLayoutName } from "./layout-presets.js";
 
-const STORAGE_KEY = "opwebview.layout.v1";
+const STORAGE_KEY = "opwebview.layout.v2";
+const NAMED_KEY = "opwebview.layouts.named.v1";
+const LEGACY_KEY = "opwebview.layout.v1";
 
-export const WIDGETS = Object.freeze([
-  {
-    id: "speed",
-    title: "Current speed",
-    className: "minimal",
-    layout: { x: 40, y: 1, w: 20, h: 27 },
-    render(state) {
-      return `<span class="widget-kicker">Current speed</span><strong class="widget-value">${Math.round(displaySpeed(state))}</strong><span class="widget-unit">${state.isMetric ? "km/h" : "mph"}</span>`;
-    }
-  },
-  {
-    id: "cruise",
-    title: "Set speed",
-    layout: { x: 2, y: 4, w: 15, h: 21 },
-    render(state) {
-      const value = isCruiseSet(state) ? Math.round(setSpeed(state)) : "—";
-      return `<span class="widget-kicker">Max</span><strong class="widget-value medium">${value}</strong><span class="widget-unit">${state.isMetric ? "km/h" : "mph"}</span>`;
-    }
-  },
-  {
-    id: "lead",
-    title: "Lead vehicle",
-    layout: { x: 79, y: 56, w: 18, h: 19 },
-    render(state) {
-      const lead = state.leadOne;
-      const present = lead && (lead.status === true || lead.present === true);
-      const distance = present ? Math.max(0, Number(lead.dRel) || 0) : null;
-      return `<span class="widget-kicker">Lead distance</span><strong class="widget-value medium">${distance === null ? "—" : Math.round(distance)}</strong><span class="widget-unit">${distance === null ? "No lead" : "meters"}</span>`;
-    }
-  },
-  {
-    id: "drive",
-    title: "Drive state",
-    layout: { x: 2, y: 72, w: 22, h: 20 },
-    render(state) {
-      const label = state.status === "engaged" ? "Engaged" : state.status === "override" ? "Override" : "Standby";
-      const camera = state.streamType === "wideRoad" ? "Wide road camera" : "Road camera";
-      return `<span class="widget-kicker">Openpilot</span><strong class="widget-value small">${label}</strong><span class="widget-detail">${camera}</span>`;
-    }
-  },
-  {
-    id: "device",
-    title: "Device data",
-    layout: { x: 78, y: 4, w: 19, h: 18 },
-    render(state) {
-      const name = state.deviceType || "Awaiting data";
-      return `<span class="widget-kicker">Device</span><strong class="widget-value small">${escapeHtml(name)}</strong><span class="widget-detail">${escapeHtml(state.sensor || "Camera sensor unknown")}</span>`;
-    }
-  }
-]);
+export { WIDGETS, BUILT_IN_LAYOUTS, createPresetLayout, sanitizeLayoutName };
 
 export class WidgetManager extends EventTarget {
   constructor({ layer, toggles, store, storage = globalThis.localStorage }) {
@@ -60,7 +14,9 @@ export class WidgetManager extends EventTarget {
     this.toggles = toggles;
     this.store = store;
     this.storage = storage;
-    this.layout = this.loadLayout();
+    const saved = this.loadLayout();
+    this.layout = saved.layout;
+    this.activeLayout = saved.activeLayout;
     this.editing = false;
     this.elements = new Map();
     this.build();
@@ -68,23 +24,27 @@ export class WidgetManager extends EventTarget {
     store.addEventListener("change", () => this.render());
   }
 
-  defaultLayout() {
-    return Object.fromEntries(WIDGETS.map((widget) => [widget.id, { ...widget.layout, hidden: false }]));
-  }
-
   loadLayout() {
-    const defaults = this.defaultLayout();
     try {
-      const saved = JSON.parse(this.storage.getItem(STORAGE_KEY) || "{}");
-      for (const widget of WIDGETS) {
-        if (saved[widget.id]) defaults[widget.id] = { ...defaults[widget.id], ...saved[widget.id] };
+      const saved = JSON.parse(this.storage.getItem(STORAGE_KEY) || "null");
+      if (saved?.layout) return { layout: normalizeLayout(saved.layout), activeLayout: saved.activeLayout || "custom" };
+    } catch {}
+    try {
+      const legacy = JSON.parse(this.storage.getItem(LEGACY_KEY) || "null");
+      if (legacy) {
+        const migrated = createPresetLayout("classic");
+        for (const widget of WIDGETS) {
+          if (!legacy[widget.id]) migrated[widget.id].hidden = true;
+          else migrated[widget.id] = { ...migrated[widget.id], ...legacy[widget.id] };
+        }
+        return { layout: migrated, activeLayout: "custom" };
       }
     } catch {}
-    return defaults;
+    return { layout: createPresetLayout("classic"), activeLayout: "classic" };
   }
 
   save() {
-    this.storage.setItem(STORAGE_KEY, JSON.stringify(this.layout));
+    this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, activeLayout: this.activeLayout, layout: this.layout }));
   }
 
   build() {
@@ -118,7 +78,13 @@ export class WidgetManager extends EventTarget {
 
   render() {
     for (const definition of WIDGETS) {
-      this.elements.get(definition.id).querySelector(".widget-surface").innerHTML = definition.render(this.store.state);
+      const surface = this.elements.get(definition.id)?.querySelector(".widget-surface");
+      if (!surface) continue;
+      const html = definition.render(this.store.state);
+      if (surface.__renderedHtml !== html) {
+        surface.innerHTML = html;
+        surface.__renderedHtml = html;
+      }
     }
   }
 
@@ -131,20 +97,82 @@ export class WidgetManager extends EventTarget {
 
   setVisible(id, visible) {
     this.layout[id].hidden = !visible;
+    this.markCustom();
     this.applyLayout(id);
     const checkbox = this.toggles.querySelector(`#widget-${id}`);
     if (checkbox) checkbox.checked = visible;
     this.save();
   }
 
+  applyPreset(id) {
+    if (!BUILT_IN_LAYOUTS[id]) return false;
+    this.layout = createPresetLayout(id);
+    this.activeLayout = id;
+    this.applyAll();
+    this.save();
+    this.emitLayoutChange();
+    return true;
+  }
+
   reset() {
-    this.layout = this.defaultLayout();
+    this.applyPreset(BUILT_IN_LAYOUTS[this.activeLayout] ? this.activeLayout : "classic");
+  }
+
+  namedLayouts() {
+    try {
+      const saved = JSON.parse(this.storage.getItem(NAMED_KEY) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  }
+
+  saveNamed(rawName) {
+    const name = sanitizeLayoutName(rawName);
+    if (!name) return null;
+    const layouts = this.namedLayouts();
+    layouts[name] = normalizeLayout(this.layout);
+    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    this.activeLayout = `saved:${name}`;
+    this.save();
+    this.emitLayoutChange();
+    return name;
+  }
+
+  applyNamed(name) {
+    const saved = this.namedLayouts()[name];
+    if (!saved) return false;
+    this.layout = normalizeLayout(saved);
+    this.activeLayout = `saved:${name}`;
+    this.applyAll();
+    this.save();
+    this.emitLayoutChange();
+    return true;
+  }
+
+  deleteNamed(name) {
+    const layouts = this.namedLayouts();
+    if (!layouts[name]) return false;
+    delete layouts[name];
+    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    if (this.activeLayout === `saved:${name}`) this.activeLayout = "custom";
+    this.save();
+    this.emitLayoutChange();
+    return true;
+  }
+
+  activeLabel() {
+    if (BUILT_IN_LAYOUTS[this.activeLayout]) return BUILT_IN_LAYOUTS[this.activeLayout].name;
+    if (this.activeLayout.startsWith("saved:")) return this.activeLayout.slice(6);
+    return "Custom";
+  }
+
+  applyAll() {
     for (const definition of WIDGETS) {
       this.applyLayout(definition.id);
       const checkbox = this.toggles.querySelector(`#widget-${definition.id}`);
-      if (checkbox) checkbox.checked = true;
+      if (checkbox) checkbox.checked = !this.layout[definition.id].hidden;
     }
-    this.save();
   }
 
   applyLayout(id) {
@@ -158,10 +186,20 @@ export class WidgetManager extends EventTarget {
     element.hidden = Boolean(layout.hidden);
   }
 
+  markCustom() {
+    this.activeLayout = "custom";
+    this.emitLayoutChange();
+  }
+
+  emitLayoutChange() {
+    this.dispatchEvent(new CustomEvent("layoutchange", { detail: { id: this.activeLayout, label: this.activeLabel() } }));
+  }
+
   startDrag(event, id) {
     if (!this.editing || event.target.closest("button")) return;
     event.preventDefault();
     const start = { x: event.clientX, y: event.clientY, ...this.layout[id] };
+    this.markCustom();
     this.trackPointer(event, ({ dx, dy }) => {
       const bounds = this.layer.getBoundingClientRect();
       this.layout[id].x = snap(clamp(start.x + dx / bounds.width * 100, 0, 100 - start.w));
@@ -175,10 +213,11 @@ export class WidgetManager extends EventTarget {
     event.preventDefault();
     event.stopPropagation();
     const start = { x: event.clientX, y: event.clientY, ...this.layout[id] };
+    this.markCustom();
     this.trackPointer(event, ({ dx, dy }) => {
       const bounds = this.layer.getBoundingClientRect();
-      this.layout[id].w = snap(clamp(start.w + dx / bounds.width * 100, 10, 100 - start.x));
-      this.layout[id].h = snap(clamp(start.h + dy / bounds.height * 100, 12, 100 - start.y));
+      this.layout[id].w = snap(clamp(start.w + dx / bounds.width * 100, 7, 100 - start.x));
+      this.layout[id].h = snap(clamp(start.h + dy / bounds.height * 100, 8, 100 - start.y));
       this.applyLayout(id);
     });
   }
@@ -203,6 +242,3 @@ export class WidgetManager extends EventTarget {
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const snap = (value) => Math.round(value * 2) / 2;
-const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
-})[character]);

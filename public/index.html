@@ -35,6 +35,9 @@
             <button id="edit-button" class="icon-button" type="button" title="Unlock widget layout" aria-pressed="false">
               <span id="edit-icon" aria-hidden="true">🔒</span><span id="edit-label" class="button-label">Unlock</span>
             </button>
+            <button id="layout-button" class="icon-button" type="button" title="Choose a dashboard layout">
+              <span aria-hidden="true">▦</span><span id="layout-label" class="button-label">Classic</span>
+            </button>
             <button id="install-button" class="icon-button" type="button" title="Install OP WebView" hidden>
               <span aria-hidden="true">↓</span><span class="button-label">Install</span>
             </button>
@@ -62,6 +65,7 @@
         <aside id="edit-tray" class="edit-tray" hidden aria-label="Widget layout tools">
           <span>Layout unlocked</span>
           <button id="widgets-button" type="button">Widgets</button>
+          <button id="edit-layouts-button" type="button">Layouts</button>
           <button id="reset-layout-button" type="button">Reset</button>
           <button id="done-editing-button" type="button">Done</button>
         </aside>
@@ -99,6 +103,26 @@
       </form>
     </dialog>
 
+    <dialog id="layout-dialog" class="panel-dialog layout-dialog">
+      <form method="dialog">
+        <header class="dialog-header">
+          <div>
+            <span class="eyebrow">DASHBOARD</span>
+            <h2>Layouts</h2>
+          </div>
+          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
+        </header>
+        <p class="dialog-copy">Recall an OPView layout or save the current widget arrangement on this device.</p>
+        <div id="layout-presets" class="layout-presets"></div>
+        <div class="section-heading"><span>Saved layouts</span></div>
+        <div id="saved-layouts" class="saved-layouts"></div>
+        <div class="save-layout-row">
+          <input id="layout-name" maxlength="40" autocomplete="off" placeholder="My driving layout" aria-label="Layout name" />
+          <button id="save-layout-button" class="primary-button" type="button">Save current</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="widget-dialog" class="panel-dialog small-dialog">
       <form method="dialog">
         <header class="dialog-header">
@@ -114,6 +138,6 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-    <script type="module" src="./src/app.js?v=4"></script>
+    <script type="module" src="./src/app.js?v=5"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-import { applyTelemetry } from "./state.js";
+import { applyTelemetry } from "./state.js?v=2";
 
 export class CerealAdapter {
   constructor(store) {

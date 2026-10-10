@@ -1,11 +1,11 @@
-import { TelemetryStore } from "./core/state.js";
-import { CerealAdapter } from "./core/telemetry-adapter.js";
+import { TelemetryStore } from "./core/state.js?v=2";
+import { CerealAdapter } from "./core/telemetry-adapter.js?v=2";
 import { DeviceDiscovery } from "./core/device-discovery.js";
-import { WebRTCTransport } from "./core/webrtc-transport.js?v=2";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=3";
 import { ConnectionManager } from "./core/connection-manager.js";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
-import { WidgetManager } from "./widgets/widget-manager.js";
-import { DemoFeed } from "./demo.js";
+import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
+import { DemoFeed } from "./demo.js?v=2";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -27,13 +27,21 @@ const elements = {
   edit: $("#edit-button"),
   editIcon: $("#edit-icon"),
   editLabel: $("#edit-label"),
+  layoutButton: $("#layout-button"),
+  layoutLabel: $("#layout-label"),
   editTray: $("#edit-tray"),
   doneEditing: $("#done-editing-button"),
   resetLayout: $("#reset-layout-button"),
   widgets: $("#widgets-button"),
+  editLayouts: $("#edit-layouts-button"),
   widgetDialog: $("#widget-dialog"),
   widgetLayer: $("#widget-layer"),
   widgetToggles: $("#widget-toggles"),
+  layoutDialog: $("#layout-dialog"),
+  layoutPresets: $("#layout-presets"),
+  savedLayouts: $("#saved-layouts"),
+  layoutName: $("#layout-name"),
+  saveLayout: $("#save-layout-button"),
   fullscreen: $("#fullscreen-button"),
   install: $("#install-button"),
   alert: $("#alert-banner"),
@@ -153,11 +161,69 @@ function updateUi() {
   elements.app.dataset.driveState = state.status;
   const hasAlert = state.alertSize > 0 && (state.alertText1 || state.alertText2);
   elements.alert.hidden = !hasAlert;
+  elements.app.classList.toggle("blind-left", state.showBlindSpot && state.leftBlindspot);
+  elements.app.classList.toggle("blind-right", state.showBlindSpot && state.rightBlindspot);
   if (hasAlert) {
     elements.alertTitle.textContent = state.alertText1;
     elements.alertDetail.textContent = state.alertText2;
     elements.alert.dataset.level = state.alertStatus === 2 ? "critical" : state.alertStatus === 1 ? "prompt" : "normal";
   }
+}
+
+function openLayoutDialog() {
+  renderLayoutDialog();
+  if (!elements.layoutDialog.open) elements.layoutDialog.showModal();
+}
+
+function renderLayoutDialog() {
+  elements.layoutPresets.replaceChildren();
+  for (const [id, preset] of Object.entries(BUILT_IN_LAYOUTS)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "layout-preset";
+    button.dataset.active = String(widgets.activeLayout === id);
+    button.innerHTML = `<strong>${preset.name}</strong><span>${preset.description}</span>`;
+    button.addEventListener("click", () => {
+      widgets.applyPreset(id);
+      renderLayoutDialog();
+      showToast(`${preset.name} layout recalled.`);
+    });
+    elements.layoutPresets.append(button);
+  }
+
+  elements.savedLayouts.replaceChildren();
+  const saved = widgets.namedLayouts();
+  if (!Object.keys(saved).length) {
+    const empty = document.createElement("p");
+    empty.className = "saved-layout-empty";
+    empty.textContent = "No custom layouts saved yet.";
+    elements.savedLayouts.append(empty);
+  }
+  for (const name of Object.keys(saved).sort((a, b) => a.localeCompare(b))) {
+    const row = document.createElement("div");
+    row.className = "saved-layout-row";
+    const label = document.createElement("strong");
+    label.textContent = name;
+    const use = document.createElement("button");
+    use.type = "button";
+    use.textContent = "Recall";
+    use.addEventListener("click", () => {
+      widgets.applyNamed(name);
+      renderLayoutDialog();
+      showToast(`${name} recalled.`);
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger-button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => {
+      widgets.deleteNamed(name);
+      renderLayoutDialog();
+    });
+    row.append(label, use, remove);
+    elements.savedLayouts.append(row);
+  }
+  elements.layoutLabel.textContent = widgets.activeLabel();
 }
 
 function toggleEditing(force) {
@@ -195,6 +261,22 @@ elements.resetLayout.addEventListener("click", () => {
   showToast("Widget layout reset.");
 });
 elements.widgets.addEventListener("click", () => elements.widgetDialog.showModal());
+elements.layoutButton.addEventListener("click", openLayoutDialog);
+elements.editLayouts.addEventListener("click", openLayoutDialog);
+elements.saveLayout.addEventListener("click", () => {
+  const name = widgets.saveNamed(elements.layoutName.value);
+  if (!name) {
+    showToast("Enter a name for this layout.");
+    elements.layoutName.focus();
+    return;
+  }
+  elements.layoutName.value = "";
+  renderLayoutDialog();
+  showToast(`${name} saved on this device.`);
+});
+widgets.addEventListener("layoutchange", () => {
+  elements.layoutLabel.textContent = widgets.activeLabel();
+});
 elements.fullscreen.addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -251,6 +333,7 @@ if ("serviceWorker" in navigator) {
 }
 
 renderDevices(discovery.saved());
+elements.layoutLabel.textContent = widgets.activeLabel();
 updateUi();
 
 // Exposed only for browser-driven smoke tests and diagnostics.
