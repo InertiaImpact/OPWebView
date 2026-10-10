@@ -607,6 +607,7 @@ button { color: inherit; }
 }
 .host-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(85, 234, 163, 0.12); }
 .form-error { margin: 10px 2px 0; color: #ff8b98; font-size: 13px; }
+.form-error[data-kind="progress"] { color: var(--accent); }
 
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-bottom: 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
 .text-button { padding: 6px 0; color: var(--accent); background: transparent; font-size: 12px; font-weight: 760; }

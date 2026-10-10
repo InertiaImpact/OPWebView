@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildStreamRequest, preferH264, resolveBridgeServices } from "../public/src/core/webrtc-transport.js";
+import { buildStreamRequest, preferH264, readinessFailureMessage, resolveBridgeServices } from "../public/src/core/webrtc-transport.js";
 
 test("preferH264 moves H264 and its RTX payload before VP8", () => {
   const sdp = [
@@ -53,4 +53,16 @@ test("builds the rx-wb stream request with streaming enabled", () => {
     bridge_services_in: [],
     bridge_services_out: services
   });
+});
+
+test("reports a stalled telemetry channel instead of claiming the stream is connected", () => {
+  assert.match(readinessFailureMessage({ dataChannelOpen: false }), /never opened its telemetry channel/i);
+});
+
+test("distinguishes an H264 decoder failure from a missing camera track", () => {
+  const message = readinessFailureMessage({ dataChannelOpen: true, dataReceived: true, videoTrack: true, videoReady: false }, {
+    packetsReceived: 12,
+    framesDecoded: 0
+  });
+  assert.match(message, /could not decode the H\.264/i);
 });

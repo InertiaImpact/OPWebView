@@ -27,6 +27,7 @@ export class ConnectionManager extends EventTarget {
       this.dispatchEvent(new CustomEvent("state", { detail: event.detail }));
     });
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
+    transport.addEventListener("progress", (event) => this.dispatchEvent(new CustomEvent("progress", { detail: event.detail })));
   }
 
   async connect(input, { remember = true } = {}) {

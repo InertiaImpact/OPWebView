@@ -9,11 +9,11 @@ test("the page and offline shell use the current versioned application modules",
     readFile(new URL("../public/service-worker.js", import.meta.url), "utf8")
   ]);
 
-  assert.match(index, /src\/app\.js\?v=5/);
-  assert.match(worker, /src\/app\.js\?v=5/);
-  assert.match(app, /core\/webrtc-transport\.js\?v=3/);
-  assert.match(worker, /core\/webrtc-transport\.js\?v=3/);
-  assert.match(worker, /opwebview-shell-v9/);
+  assert.match(index, /src\/app\.js\?v=6/);
+  assert.match(worker, /src\/app\.js\?v=6/);
+  assert.match(app, /core\/webrtc-transport\.js\?v=4/);
+  assert.match(worker, /core\/webrtc-transport\.js\?v=4/);
+  assert.match(worker, /opwebview-shell-v10/);
   assert.match(worker, /widgets\/widget-catalog\.js/);
   assert.match(worker, /widgets\/layout-presets\.js/);
   assert.match(app, /updateViaCache:\s*"none"/);

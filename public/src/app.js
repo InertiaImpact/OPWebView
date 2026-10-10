@@ -1,7 +1,7 @@
 import { TelemetryStore } from "./core/state.js?v=2";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=2";
 import { DeviceDiscovery } from "./core/device-discovery.js";
-import { WebRTCTransport } from "./core/webrtc-transport.js?v=3";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
 import { ConnectionManager } from "./core/connection-manager.js";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
@@ -75,6 +75,7 @@ function setConnectionStatus(status, label) {
 function openConnectionDialog() {
   renderDevices(discovery.saved());
   elements.connectionError.hidden = true;
+  elements.connectionError.dataset.kind = "error";
   if (!elements.connectionDialog.open) elements.connectionDialog.showModal();
   queueMicrotask(() => elements.host.focus());
 }
@@ -115,9 +116,10 @@ async function connectDevice(input) {
     await connection.connect(input);
     elements.connectionDialog.close();
     setConnectionStatus("connected", input.label || input.host || "Connected");
-    showToast("Camera and telemetry connected.");
+    showToast("Camera and telemetry are live.");
   } catch (error) {
     setConnectionStatus("offline", "Retrying");
+    elements.connectionError.dataset.kind = "error";
     elements.connectionError.textContent = error.message || "Connection failed.";
     elements.connectionError.hidden = false;
   } finally {
@@ -288,10 +290,16 @@ elements.video.addEventListener("emptied", () => elements.app.classList.remove("
 store.addEventListener("change", updateUi);
 connection.addEventListener("state", (event) => {
   if (demoActive) return;
-  if (event.detail === "connecting") setConnectionStatus("connecting", "Connecting");
+  if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
   else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
   else if (["failed", "offline"].includes(event.detail)) setConnectionStatus("offline", "Reconnecting");
   else setConnectionStatus("disconnected", "Offline");
+});
+connection.addEventListener("progress", (event) => {
+  if (!elements.connectionDialog.open) return;
+  elements.connectionError.dataset.kind = "progress";
+  elements.connectionError.textContent = event.detail;
+  elements.connectionError.hidden = false;
 });
 connection.addEventListener("retry", (event) => showToast(`Connection lost. Retry ${event.detail} of 3…`));
 document.addEventListener("visibilitychange", () => {
