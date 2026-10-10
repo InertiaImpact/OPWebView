@@ -1,12 +1,13 @@
-import { TelemetryStore } from "./core/state.js?v=2";
-import { CerealAdapter } from "./core/telemetry-adapter.js?v=2";
+import { TelemetryStore } from "./core/state.js?v=3";
+import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
 import { DeviceDiscovery } from "./core/device-discovery.js?v=2";
 import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
 import { ConnectionManager } from "./core/connection-manager.js?v=2";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
-import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
-import { DemoFeed } from "./demo.js?v=2";
-import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=2";
+import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
+import { DemoFeed } from "./demo.js?v=3";
+import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=3";
+import { ViewportController } from "./core/viewport-controller.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -44,6 +45,7 @@ const elements = {
   layoutName: $("#layout-name"),
   saveLayout: $("#save-layout-button"),
   fullscreen: $("#fullscreen-button"),
+  controlsToggle: $("#controls-toggle"),
   install: $("#install-button"),
   diagnostics: $("#diagnostics-button"),
   connectionDiagnostics: $("#connection-diagnostics-button"),
@@ -68,7 +70,7 @@ const adapter = new CerealAdapter(store);
 const discovery = new DeviceDiscovery();
 const transport = new WebRTCTransport(elements.video);
 const connection = new ConnectionManager({ store, transport, adapter, discovery });
-const renderer = new OverlayRenderer(elements.canvas, store);
+const renderer = new OverlayRenderer(elements.canvas, store, elements.video);
 const widgets = new WidgetManager({
   layer: elements.widgetLayer,
   toggles: elements.widgetToggles,
@@ -76,6 +78,8 @@ const widgets = new WidgetManager({
 });
 const demo = new DemoFeed(adapter);
 const diagnostics = new DiagnosticLog();
+const viewport = new ViewportController({ app: elements.app, video: elements.video, renderer, widgets,
+  onChange: (detail) => diagnostics.add("info", "viewport", `Presentation changed to ${detail.mode}`, detail) });
 
 let demoActive = false;
 let installPrompt = null;
@@ -238,6 +242,7 @@ function updateUi() {
   elements.app.classList.toggle("blind-left", state.showBlindSpot && state.leftBlindspot);
   elements.app.classList.toggle("blind-right", state.showBlindSpot && state.rightBlindspot);
   if (hasAlert) {
+    elements.alert.dataset.fullscreen = String(state.alertSize === 3 || state.alertStatus === 2);
     elements.alertTitle.textContent = state.alertText1;
     elements.alertDetail.textContent = state.alertText2;
     elements.alert.dataset.level = state.alertStatus === 2 ? "critical" : state.alertStatus === 1 ? "prompt" : "normal";
@@ -259,6 +264,8 @@ function renderLayoutDialog() {
     button.innerHTML = `<strong>${preset.name}</strong><span>${preset.description}</span>`;
     button.addEventListener("click", () => {
       widgets.applyPreset(id);
+      elements.app.classList.remove("controls-open");
+      elements.controlsToggle.setAttribute("aria-expanded", "false");
       renderLayoutDialog();
       showToast(`${preset.name} layout recalled.`);
     });
@@ -301,6 +308,10 @@ function renderLayoutDialog() {
 }
 
 function toggleEditing(force) {
+  if (elements.app.dataset.presentation !== "full" && force !== false) {
+    showToast("Return to the full dashboard to edit your layout.");
+    return;
+  }
   const editing = typeof force === "boolean" ? force : !widgets.editing;
   widgets.setEditing(editing);
   elements.edit.setAttribute("aria-pressed", String(editing));
@@ -388,12 +399,25 @@ elements.saveLayout.addEventListener("click", () => {
 });
 widgets.addEventListener("layoutchange", () => {
   elements.layoutLabel.textContent = widgets.activeLabel();
+  viewport.refresh();
+});
+
+elements.controlsToggle.addEventListener("click", () => {
+  const open = elements.app.classList.toggle("controls-open");
+  elements.controlsToggle.setAttribute("aria-expanded", String(open));
 });
 elements.fullscreen.addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await document.documentElement.requestFullscreen();
+    elements.app.classList.remove("controls-open");
+    elements.controlsToggle.setAttribute("aria-expanded", "false");
+    viewport.refresh();
   } catch { showToast("Fullscreen is not available in this browser."); }
+});
+document.addEventListener("fullscreenchange", () => {
+  elements.fullscreen.setAttribute("aria-pressed", String(Boolean(document.fullscreenElement)));
+  elements.fullscreen.setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Toggle fullscreen");
 });
 elements.video.addEventListener("playing", () => {
   elements.app.classList.add("video-ready");

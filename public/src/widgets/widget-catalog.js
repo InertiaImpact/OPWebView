@@ -2,12 +2,14 @@ import {
   activeLead,
   displaySpeed,
   isCruiseSet,
+  leadWarningColor,
   setSpeed,
   speedConversion,
   speedLimitToShow,
   steeringMode,
   torqueBarValue
-} from "../core/state.js?v=2";
+} from "../core/state.js?v=3";
+import { torqueGraph, traceGraph } from "./widget-graphs.js";
 
 const dash = "–";
 const noLead = "– –";
@@ -17,8 +19,10 @@ const safe = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => (
 const number = (value, digits = 0) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : dash;
 const angle = (value) => `${Math.abs(Number(value)) < 0.05 ? "0.0" : Number(value).toFixed(1)}°`;
 const speedUnit = (state) => state.isMetric ? "km/h" : "mph";
-const row = (label, value, tone = "") => `<div class="data-row"><span>${label}</span><strong class="${tone}">${value}</strong></div>`;
-const panel = (title, rows, badge = "") => `<header><span>${title}</span>${badge ? `<em>${badge}</em>` : ""}</header><div class="data-rows">${rows.join("")}</div>`;
+const row = (label, value, tone = "") => `<div class="data-row"><span>${label}</span><strong ${tone.startsWith('rgb(') ? `style="color:${tone}"` : `class="${tone}"`}>${value}</strong></div>`;
+const panel = (title, rows, badge = "", footer = "") => `<header><button type="button" class="panel-toggle" aria-label="Fold ${title.toLowerCase()} panel" aria-expanded="true">${title}<span aria-hidden="true"> ▾</span></button>${badge ? `<em class="${badge === 'SATURATED' || badge === 'EXPERIMENTAL' ? 'warn' : title === 'LEAD' ? 'angle' : badge === 'CHILL' ? 'dim' : 'good'}">${badge}</em>` : ""}</header><div class="data-rows">${rows.join("")}</div>${footer}`;
+const leadTone = (lead) => lead ? leadWarningColor(lead.distance, lead.relative) : "dim";
+const networkBars = (value) => ({ poor: 1, moderate: 2, good: 3, great: 4 })[value] || 0;
 
 function driveLabel(state) {
   return ({ engaged: "Engaged", override: "Override", latOnly: "Steering", longOnly: "Cruise" })[state.status] || "Standby";
@@ -36,7 +40,7 @@ function leadValues(state) {
     gap: state.vEgo > 0.5 ? `${(distance / state.vEgo).toFixed(1)} s` : dash,
     relativeText: `${relative * conversion > 0 ? "+" : ""}${Math.round(relative * conversion)} ${speedUnit(state)}`,
     leadSpeed: `${Math.max(0, Math.round((state.vEgo + relative) * conversion))} ${speedUnit(state)}`,
-    impact: relative < -0.1 ? `${(distance / -relative).toFixed(1)} s` : dash
+    impact: relative < -0.1 && distance / -relative < 99 ? `${(distance / -relative).toFixed(1)} s` : dash
   };
 }
 
@@ -46,7 +50,7 @@ function gear(value) {
 
 export const WIDGETS = Object.freeze([
   {
-    id: "speed", title: "Current speed", className: "classic-speed minimal",
+    id: "speed", title: "Current speed", className: "classic-speed",
     render: (state) => `<strong class="speed-number">${Math.round(displaySpeed(state))}</strong><span class="speed-unit">${speedUnit(state)}</span>`
   },
   {
@@ -58,13 +62,13 @@ export const WIDGETS = Object.freeze([
     render(state) {
       const limit = speedLimitToShow(state);
       const next = state.speedLimitAheadValid && state.speedLimitAhead > 0
-        ? `<small>next ${Math.round(state.speedLimitAhead * speedConversion(state))} · ${formatDistance(state.speedLimitAheadDistance, state.isMetric)}</small>` : "";
-      return `<strong>${limit === null ? noLead : Math.round(limit * speedConversion(state))}</strong><span>LIMIT</span>${next}`;
+        ? `<small>next ${Math.round(state.speedLimitAhead * speedConversion(state))} in ${formatDistance(state.speedLimitAheadDistance, state.isMetric)}</small>` : "";
+      return `<div class="limit-main"><span class="classic-limit-label">SPEED<br>LIMIT</span><strong>${limit === null ? noLead : Math.round(limit * speedConversion(state))}</strong><span class="limit-label">LIMIT</span></div>${next}`;
     }
   },
   {
     id: "roadName", title: "Road name", className: "road-name-pill",
-    render: (state) => `<strong>${safe(state.roadName || "Road name unavailable")}</strong>`
+    render: (state) => `<strong>${safe(state.roadName || "")}</strong>`
   },
   {
     id: "clock", title: "Clock", className: "clock-pill",
@@ -72,11 +76,19 @@ export const WIDGETS = Object.freeze([
   },
   {
     id: "driver", title: "Driver monitoring", className: "driver-disc",
-    render: (state) => `<div class="driver-cone ${state.dmAwarenessPercent < 95 ? "warn" : ""}" style="--rotation:${state.dmRotationDeg}deg"></div><div class="driver-head ${state.dmFaceDetected ? "seen" : ""}"></div><span>${state.dmSeen ? `${Math.round(state.dmAwarenessPercent)}%` : noLead}</span>`
+    render(state) {
+      const live = state.status !== "disengaged" && state.dmActive;
+      return `<svg viewBox="0 0 100 100" class="driver-symbol ${live ? "live" : "inactive"}" role="img" aria-label="Driver attention ${state.dmSeen ? Math.round(state.dmAwarenessPercent) + ' percent' : 'unavailable'}">${live ? `<path d="M18,23 A42,42 0 0 1 82,23" transform="rotate(${state.dmRotationDeg - 90} 50 50)" fill="none" stroke="${state.dmAwarenessPercent < 95 ? '#ff7300' : '#00ff40'}" stroke-width="8" stroke-linecap="round"/>` : ""}<circle cx="50" cy="42" r="12" fill="white"/><path d="M27,70 Q27,54 50,54 Q73,54 73,70 Z" fill="white"/></svg>`;
+    }
   },
   {
     id: "confidence", title: "Model confidence", className: "confidence-disc",
-    render: (state) => `<div class="confidence-dot" style="--confidence:${Math.max(0, Math.min(1, state.confidenceFiltered))}"></div><span>${state.confidenceSeen ? `${Math.round(state.confidenceFiltered * 100)}%` : noLead}</span>`
+    render(state) {
+      const live = state.status !== "disengaged" && state.confidenceSeen;
+      const c = Math.max(0, Math.min(1, state.confidenceFiltered));
+      const colors = c > .5 ? ["#00ffcc", "#00ff26"] : c > .2 ? ["#ffc800", "#ff7300"] : ["#ff0015", "#ff0059"];
+      return `<svg viewBox="0 0 100 100" class="driver-symbol ${live ? '' : 'inactive'}" role="img" aria-label="Model confidence ${live ? Math.round(c * 100) + ' percent' : 'unavailable'}"><defs><linearGradient id="confidence-gradient" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient></defs><circle cx="50" cy="50" r="40" fill="none" stroke="#ffffff2e" stroke-width="4.5"/>${live ? `<circle cx="50" cy="50" r="${8 + 26 * c}" fill="url(#confidence-gradient)"/>` : ""}</svg>`;
+    }
   },
   {
     id: "steering", title: "Steering", className: "info-stack",
@@ -94,7 +106,7 @@ export const WIDGETS = Object.freeze([
     render(state) {
       const lead = leadValues(state);
       return [
-        row("GAP", lead?.gap ?? noLead),
+        row("GAP", lead?.gap ?? noLead, leadTone(lead)),
         row("REL", lead?.relativeText ?? noLead),
         row("LEAD", lead?.leadSpeed ?? noLead)
       ].join("");
@@ -104,7 +116,7 @@ export const WIDGETS = Object.freeze([
     id: "torque", title: "Steering torque", className: "torque-meter",
     render(state) {
       const value = torqueBarValue(state);
-      return `<span>TORQUE</span><div class="torque-track"><i style="--torque:${value}"></i></div><strong>${Math.round(value * 100)}%</strong>`;
+      return torqueGraph(value, state.status);
     }
   },
   {
@@ -113,7 +125,7 @@ export const WIDGETS = Object.freeze([
       row("CPU", state.deviceSeen ? `${Math.round(state.cpuTempC)}°C` : dash),
       row("MEM", state.deviceSeen ? `${state.memoryUsagePercent}%` : dash),
       row("DISK", state.deviceSeen ? `${Math.round(100 - state.freeSpacePercent)}%` : dash),
-      row("WI-FI", state.deviceSeen ? safe(state.networkStrength) : dash),
+      row("Wi-Fi", state.deviceSeen ? `<span class="network-bars" aria-label="${safe(state.networkStrength)} signal">${[0,1,2,3].map((i) => `<i class="${i < networkBars(state.networkStrength) ? 'lit' : ''}" style="height:${35 + i * 20}%"></i>`).join('')}</span>` : dash),
       row("POWER", state.deviceSeen ? `${number(state.powerDrawW, 1)} W` : dash),
       row("CALIB", state.calStatus === "calibrated" ? "100%" : state.calPerc ? `${state.calPerc}%` : dash)
     ].join("")
@@ -132,7 +144,7 @@ export const WIDGETS = Object.freeze([
         row("Torque cmd", state.latActive ? `${Math.round(state.torqueOutput * 100)}%` : dash),
         row("Driver torque", number(state.steeringTorque, 1)),
         row("Lat accel", state.latActive ? `${number(lateralWant, 2)} / ${number(lateralGot, 2)}` : dash)
-      ], state.lateralSaturated ? "SATURATED" : "NOT SATURATED");
+      ], state.latActive ? state.lateralSaturated ? "SATURATED" : "NOT SATURATED" : "", traceGraph(state.history, { label: "lat accel", want: "want", got: "got", color: "#3adb6d", lo: -2, hi: 2 }));
     }
   },
   {
@@ -153,18 +165,18 @@ export const WIDGETS = Object.freeze([
         row("Accel cmd", state.longActive ? `${number(state.accelCommand, 2)} m/s²` : dash),
         row("Accel actual", `${number(state.aEgo, 2)} m/s²`),
         row("Throttle / brake", pedals, pedals === "— / —" ? "dim" : "warn")
-      ], state.experimentalMode ? "EXPERIMENTAL" : "CHILL");
+      ], state.experimentalMode ? "EXPERIMENTAL" : "CHILL", traceGraph(state.history, { label: "accel", want: "cmd", got: "actual", color: "#ff9a3c", lo: -2, hi: 1.5 }));
     }
   },
   {
     id: "detailedLead", title: "Detailed lead", className: "detail-panel",
     render(state) {
       const lead = leadValues(state);
-      const second = state.leadTwo && (state.leadTwo.present || state.leadTwo.status)
+      const second = state.leadTwo && (state.leadTwo.present || state.leadTwo.status) && Math.abs(Number(state.leadTwo.dRel) - (lead?.distance || 0)) > 3
         ? formatLeadDistance(Number(state.leadTwo.dRel) || 0, state.isMetric) : dash;
       return panel("LEAD", [
-        row("Distance", lead ? formatLeadDistance(lead.distance, state.isMetric) : noLead),
-        row("Gap", lead?.gap ?? noLead),
+        row("Distance", lead ? formatLeadDistance(lead.distance, state.isMetric) : noLead, leadTone(lead)),
+        row("Gap", lead?.gap ?? noLead, leadTone(lead)),
         row("Closing", lead?.relativeText ?? noLead),
         row("Lead speed", lead?.leadSpeed ?? noLead),
         row("Time to impact", lead?.impact ?? noLead),
@@ -174,7 +186,7 @@ export const WIDGETS = Object.freeze([
   },
   {
     id: "status", title: "Vehicle status", className: "status-strip",
-    render: (state) => `<span>${gear(state.gearShifter)}</span>${state.leftBlinker ? "<span>◀ signal</span>" : ""}${state.rightBlinker ? "<span>signal ▶</span>" : ""}<span>lanes ${number(state.laneLineProbs[1], 2)} · ${number(state.laneLineProbs[2], 2)}</span><span>curv ${number(state.curvature, 4)}</span>`
+    render: (state) => `<span>${gear(state.gearShifter)}</span>${state.leftBlinker && state.rightBlinker ? '<span class="warn">◀ hazards ▶</span>' : state.leftBlinker ? '<span class="warn">◀ signal</span>' : state.rightBlinker ? '<span class="warn">signal ▶</span>' : ''}${state.leftBlindspot || state.rightBlindspot ? `<span class="warn">BSM ${state.leftBlindspot ? 'L' : ''} ${state.rightBlindspot ? 'R' : ''}</span>` : ''}<span>lanes L ${number(state.laneLineProbs[1], 2)} · R ${number(state.laneLineProbs[2], 2)}</span><span>curv ${number(state.curvature, 4)}</span>`
   },
   {
     id: "mode", title: "Driving mode", className: "mode-pill",

@@ -1,24 +1,26 @@
-const CACHE_NAME = "opwebview-shell-v15";
+const CACHE_NAME = "opwebview-shell-v20";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=4",
+  "./styles.css?v=5",
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",
-  "./src/app.js?v=10",
-  "./src/demo.js?v=2",
-  "./src/core/state.js?v=2",
-  "./src/core/telemetry-adapter.js?v=2",
+  "./src/app.js?v=11",
+  "./src/demo.js?v=3",
+  "./src/core/state.js?v=3",
+  "./src/core/telemetry-adapter.js?v=3",
   "./src/core/device-discovery.js?v=2",
   "./src/core/webrtc-transport.js?v=4",
   "./src/core/connection-manager.js?v=2",
-  "./src/core/diagnostic-log.js?v=2",
+  "./src/core/diagnostic-log.js?v=3",
+  "./src/core/viewport-controller.js",
   "./src/render/projection.js",
   "./src/render/overlay-renderer.js",
-  "./src/widgets/widget-manager.js?v=2",
+  "./src/widgets/widget-manager.js?v=3",
   "./src/widgets/widget-catalog.js",
   "./src/widgets/layout-presets.js",
+  "./src/widgets/widget-graphs.js",
   "./vendor/qrcode-generator.js?v=1"
 ];
 

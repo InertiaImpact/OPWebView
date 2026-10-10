@@ -16,6 +16,8 @@ This first milestone includes:
 - A no-hardware demo mode for validating the layout and renderer
 - A GitHub Pages deployment workflow
 
+The presets use OPView's reference sizing rather than stretching corner widgets with the window. Detailed includes live ten-second acceleration graphs and folding panels. Small page windows temporarily show speed and torque only; standard video Picture-in-Picture stays camera-only. The full chosen layout restores on return. See [the visual/resize verification notes](docs/hud-visual-pass.md) for reference details, test coverage and Android limitations.
+
 ## Run locally
 
 No dependencies or build step are required.

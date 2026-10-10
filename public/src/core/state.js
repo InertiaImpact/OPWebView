@@ -8,6 +8,7 @@ export const SPEED = Object.freeze({
 export function createInitialState() {
   return {
     version: 0,
+    history: [],
     status: "disengaged",
     started: false,
     isConnected: false,
@@ -246,6 +247,16 @@ export function applyTelemetry(store, type, data) {
           state.steerOverrideProb = largest(predictions.steerOverrideProbs);
           state.confidenceFiltered += 0.09 * (confidenceTarget(state) - state.confidenceFiltered);
         }
+        const time = Date.now();
+        // Bounded ten-second traces. Sample at most 20 Hz, only with live model
+        // frames, never pad gaps with fabricated data after background suspension.
+        if (!state.history.length || time - state.history.at(-1).t >= 50) {
+          state.history.push({ t: time,
+            want: state.latActive ? state.desiredCurvature * state.vEgo ** 2 : 0,
+            got: state.curvature * state.vEgo ** 2,
+            cmd: state.longActive ? state.accelCommand : 0, actual: state.aEgo });
+          state.history = state.history.filter((sample) => time - sample.t <= 10000).slice(-200);
+        }
       }, { render: true });
       return true;
     case "liveCalibration":
@@ -379,6 +390,14 @@ export function speedConversion(state) {
 export function activeLead(state) {
   const lead = state.leadOne;
   return lead && (lead.status === true || lead.present === true) ? lead : null;
+}
+
+export function leadWarningColor(distance, relativeSpeed) {
+  const level = distance >= 40 ? 0 : clamp(1 - distance / 40 + Math.max(0, -relativeSpeed / 10), 0, 1);
+  const a = level < .5 ? [255,255,255] : [255,154,60];
+  const b = level < .5 ? [255,154,60] : [255,59,59];
+  const t = level < .5 ? level * 2 : (level - .5) * 2;
+  return `rgb(${a.map((value, i) => Math.round(value + (b[i] - value) * t)).join(',')})`;
 }
 
 export function steeringMode(state) {

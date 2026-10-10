@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
     <title>OP WebView</title>
   </head>
   <body>
@@ -19,7 +19,8 @@
         <canvas id="model-overlay" aria-label="Telemetry overlay"></canvas>
         <div id="engagement-frame" class="engagement-frame" aria-hidden="true"></div>
 
-        <div class="topbar">
+        <button id="controls-toggle" class="controls-toggle" type="button" aria-label="Show viewer controls" aria-expanded="false" aria-controls="viewer-topbar">⋯</button>
+        <div class="topbar" id="viewer-topbar">
           <div class="brand-lockup">
             <span class="brand-mark" aria-hidden="true"></span>
             <span class="brand-name">OP WebView</span>
@@ -173,6 +174,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=10"></script>
+    <script type="module" src="./src/app.js?v=11"></script>
   </body>
 </html>

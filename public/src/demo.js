@@ -41,7 +41,7 @@ export class DemoFeed {
       { type: "carControl", data: { latActive: true, longActive: true, actuators: { accel: 0.2, steeringAngleDeg: Math.sin(elapsed * 0.7) * 8.5 } } },
       { type: "carOutput", data: { actuatorsOutput: { torque: Math.sin(elapsed * 0.7) * 0.35, torqueOutputCan: 0.2 } } },
       { type: "driverMonitoringState", data: { activePolicy: "vision", isRHD: false, visionPolicyState: { faceDetected: true, awarenessPercent: 98, pose: { pitch: 0, yaw: Math.sin(elapsed * 0.2) * 0.05 } } } },
-      { type: "modelV2", data: { position: { x, y: curve(0), z: zero }, laneLines: lanes, laneLineProbs: [0.35, 0.95, 0.95, 0.35], roadEdges: edges, roadEdgeStds: [0.15, 0.25], acceleration: { x: x.map((_, index) => Math.sin(elapsed + index / 7) * 0.35) } } }
+      { type: "modelV2", data: { position: { x, y: curve(0), z: zero }, laneLines: lanes, laneLineProbs: [0.35, 0.95, 0.95, 0.35], roadEdges: edges, roadEdgeStds: [0.15, 0.25], acceleration: { x: x.map((_, index) => Math.sin(elapsed + index / 7) * 0.35) }, meta: { disengagePredictions: { brakeDisengageProbs: [.04], steerOverrideProbs: [.02] } } } }
     ];
     this.adapter.apply(messages.map((message) => JSON.stringify(message)).join(""));
   }

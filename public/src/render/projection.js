@@ -67,18 +67,33 @@ export function calibrationMatrix(state) {
 }
 
 export function calculateFrameMatrix(state, screenWidth, screenHeight) {
+  return calculateFrameTransform(state, screenWidth, screenHeight).matrix;
+}
+
+export function calculateFrameTransform(state, screenWidth, screenHeight) {
   const wide = state.streamType === "wideRoad";
   const config = cameraFor(state.deviceType, state.sensor);
   const camera = wide ? config.ecam : config.fcam;
-  const zoom = wide ? 2 : 1.1;
-  const videoScale = Math.max(screenWidth / camera.width, screenHeight / camera.height);
-  const focal = camera.focalLength * videoScale * zoom;
-  const scaledIntrinsic = [
-    [focal, 0, screenWidth / 2],
-    [0, focal, screenHeight / 2],
+  const scale = screenHeight / 1080;
+  const border = state.hudLayout === "classic" ? 30 * scale : 0;
+  const w = screenWidth - 2 * border, h = screenHeight - 2 * border;
+  const cx = camera.width / 2, cy = camera.height / 2;
+  const zoom = Math.max((wide ? 2 : 1.1) * scale, w / camera.width, h / camera.height);
+  const intrinsic = [
+    [camera.focalLength, 0, cx],
+    [0, camera.focalLength, cy],
     [0, 0, 1]
   ];
-  return matmul3x3(scaledIntrinsic, calibrationMatrix(state));
+  const calibrated = matmul3x3(intrinsic, calibrationMatrix(state));
+  const horizon = matvec3(calibrated, [1000, 0, 0]);
+  const limitX = Math.max(0, cx * zoom - w / 2 - 5 * scale);
+  const limitY = Math.max(0, cy * zoom - h / 2 - 5 * scale);
+  const clamp = (v, limit) => Math.max(-limit, Math.min(limit, v));
+  const dx = Math.abs(horizon[2]) > 1e-6 ? clamp((horizon[0] / horizon[2] - cx) * zoom, limitX) : 0;
+  const dy = Math.abs(horizon[2]) > 1e-6 ? clamp((horizon[1] / horizon[2] - cy) * zoom, limitY) : 0;
+  const left = screenWidth / 2 - dx - cx * zoom, top = screenHeight / 2 - dy - cy * zoom;
+  return { left, top, width: camera.width * zoom, height: camera.height * zoom,
+    matrix: matmul3x3([[zoom, 0, left], [0, zoom, top], [0, 0, 1]], calibrated) };
 }
 
 export function projectPoint(matrix, [x, y, z], clip) {

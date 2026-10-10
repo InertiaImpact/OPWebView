@@ -57,9 +57,9 @@ test("offline navigation with a new query and scripts use the same installed rel
   const runtime = worker();
   await runtime.install();
   const page = await runtime.request("?v=another-release", "navigate");
-  const script = await runtime.request("src/app.js?v=10");
+  const script = await runtime.request("src/app.js?v=11");
   assert.match(await page.text(), /index\.html/);
-  assert.match(await script.text(), /app\.js\?v=10/);
+  assert.match(await script.text(), /app\.js\?v=11/);
   assert.equal(runtime.networkCalls, 0);
   assert.equal(runtime.skipped, false);
 });
