@@ -1,11 +1,11 @@
-const CACHE_NAME = "opwebview-shell-v14";
+const CACHE_NAME = "opwebview-shell-v15";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=4",
   "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
+  "./icons/web-wheel-192.png",
+  "./icons/web-wheel-512.png",
   "./src/app.js?v=10",
   "./src/demo.js?v=2",
   "./src/core/state.js?v=2",
