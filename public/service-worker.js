@@ -1,23 +1,25 @@
-const CACHE_NAME = "opwebview-shell-v12";
+const CACHE_NAME = "opwebview-shell-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=3",
+  "./styles.css?v=4",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  "./src/app.js?v=8",
+  "./src/app.js?v=9",
   "./src/demo.js?v=2",
   "./src/core/state.js?v=2",
   "./src/core/telemetry-adapter.js?v=2",
   "./src/core/device-discovery.js?v=2",
   "./src/core/webrtc-transport.js?v=4",
   "./src/core/connection-manager.js?v=2",
+  "./src/core/diagnostic-log.js?v=1",
   "./src/render/projection.js",
   "./src/render/overlay-renderer.js",
   "./src/widgets/widget-manager.js?v=2",
   "./src/widgets/widget-catalog.js",
-  "./src/widgets/layout-presets.js"
+  "./src/widgets/layout-presets.js",
+  "./vendor/qrcode-generator.js?v=1"
 ];
 
 self.addEventListener("install", (event) => {

@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=3" />
+    <link rel="stylesheet" href="./styles.css?v=4" />
     <title>OP WebView</title>
   </head>
   <body>
@@ -40,6 +40,9 @@
             </button>
             <button id="install-button" class="icon-button" type="button" title="Install OP WebView" hidden>
               <span aria-hidden="true">↓</span><span class="button-label">Install</span>
+            </button>
+            <button id="diagnostics-button" class="icon-button" type="button" title="View diagnostic log">
+              <span aria-hidden="true">ⓘ</span><span class="button-label">Logs</span>
             </button>
             <button id="fullscreen-button" class="icon-button compact" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">⛶</button>
           </div>
@@ -89,6 +92,7 @@
           <button id="connect-submit" class="primary-button" value="default" type="submit">Connect</button>
         </div>
         <p id="connection-error" class="form-error" role="alert" hidden></p>
+        <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">View diagnostic log + QR</button>
 
         <div class="section-heading">
           <span>Discovered &amp; saved</span>
@@ -136,8 +140,37 @@
       </form>
     </dialog>
 
+    <dialog id="diagnostics-dialog" class="panel-dialog diagnostics-dialog">
+      <form method="dialog">
+        <header class="dialog-header">
+          <div>
+            <span class="eyebrow">LOCAL DIAGNOSTICS</span>
+            <h2>Connection log</h2>
+          </div>
+          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
+        </header>
+        <p class="dialog-copy">Stored only in this browser. The QR contains recent events as JSON for a QR decoder. Copy or download the full log to share with an LLM. Logs include device addresses and browser information.</p>
+        <div class="diagnostics-grid">
+          <section>
+            <div class="section-heading diagnostics-heading"><span>Event log</span><span id="diagnostics-count"></span></div>
+            <pre id="diagnostics-output" class="diagnostics-output" tabindex="0"></pre>
+          </section>
+          <section class="diagnostics-qr-section">
+            <div class="section-heading diagnostics-heading"><span>LLM-readable QR</span><span id="diagnostics-qr-size"></span></div>
+            <div id="diagnostics-qr" class="diagnostics-qr" aria-label="QR code containing compact diagnostic JSON"></div>
+          </section>
+        </div>
+        <div class="diagnostics-actions">
+          <button id="copy-diagnostics-button" class="primary-button" type="button">Copy log</button>
+          <button id="download-diagnostics-button" class="secondary-button" type="button">Download</button>
+          <button id="clear-diagnostics-button" class="secondary-button danger-button" type="button">Clear</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-    <script type="module" src="./src/app.js?v=8"></script>
+    <script src="./vendor/qrcode-generator.js?v=1"></script>
+    <script type="module" src="./src/app.js?v=9"></script>
   </body>
 </html>

@@ -585,6 +585,7 @@ button { color: inherit; }
 .panel-dialog form { padding: 28px; }
 .small-dialog { width: min(460px, calc(100vw - 32px)); }
 .layout-dialog { width: min(720px, calc(100vw - 32px)); }
+.diagnostics-dialog { width: min(1040px, calc(100vw - 32px)); }
 
 .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .dialog-header h2 { margin: 7px 0 0; font-size: 30px; letter-spacing: -0.04em; }
@@ -608,6 +609,7 @@ button { color: inherit; }
 .host-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(85, 234, 163, 0.12); }
 .form-error { margin: 10px 2px 0; color: #ff8b98; font-size: 13px; }
 .form-error[data-kind="progress"] { color: var(--accent); }
+.diagnostic-link { margin-top: 4px; }
 
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-bottom: 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
 .text-button { padding: 6px 0; color: var(--accent); background: transparent; font-size: 12px; font-weight: 760; }
@@ -620,6 +622,28 @@ button { color: inherit; }
 .compatibility-note { margin-top: 20px; padding: 14px 16px; border-radius: 13px; color: var(--muted); background: rgba(255, 255, 255, 0.035); font-size: 13px; line-height: 1.5; }
 .compatibility-note summary { color: var(--text); font-weight: 700; cursor: pointer; }
 .compatibility-note p { margin: 10px 0 0; }
+
+.diagnostics-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .75fr); gap: 18px; }
+.diagnostics-heading { margin-top: 0; }
+.diagnostics-heading span:last-child { color: var(--accent); font-size: 10px; }
+.diagnostics-output {
+  min-height: 320px;
+  max-height: min(52vh, 520px);
+  margin: 10px 0 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: #c9e1ea;
+  background: #030b0f;
+  font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diagnostics-qr { display: grid; min-height: 250px; margin-top: 10px; padding: 14px; place-items: center; border-radius: 14px; color: #ff8b98; background: #fff; }
+.diagnostics-qr svg { display: block; width: 100%; max-width: 360px; height: auto; }
+.diagnostics-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.diagnostics-actions .danger-button { color: #ff9ba6; border-color: rgba(255, 83, 102, .24); background: rgba(255, 83, 102, .1); }
 
 .widget-toggles { display: grid; gap: 9px; margin-top: 22px; }
 .widget-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; background: #0a1921; }
@@ -669,6 +693,8 @@ button { color: inherit; }
   .empty-actions { margin-top: 18px; }
   .edit-tray > span { display: none; }
   .layout-presets { grid-template-columns: 1fr; }
+  .diagnostics-grid { grid-template-columns: 1fr; }
+  .diagnostics-output { min-height: 220px; max-height: 36vh; }
   .layout-preset { min-height: 78px; }
   .app.demo-active .toolbar,
   .app.video-ready .toolbar,

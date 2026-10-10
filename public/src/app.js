@@ -6,6 +6,7 @@ import { ConnectionManager } from "./core/connection-manager.js?v=2";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
 import { DemoFeed } from "./demo.js?v=2";
+import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=1";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -44,6 +45,16 @@ const elements = {
   saveLayout: $("#save-layout-button"),
   fullscreen: $("#fullscreen-button"),
   install: $("#install-button"),
+  diagnostics: $("#diagnostics-button"),
+  connectionDiagnostics: $("#connection-diagnostics-button"),
+  diagnosticsDialog: $("#diagnostics-dialog"),
+  diagnosticsOutput: $("#diagnostics-output"),
+  diagnosticsCount: $("#diagnostics-count"),
+  diagnosticsQr: $("#diagnostics-qr"),
+  diagnosticsQrSize: $("#diagnostics-qr-size"),
+  copyDiagnostics: $("#copy-diagnostics-button"),
+  downloadDiagnostics: $("#download-diagnostics-button"),
+  clearDiagnostics: $("#clear-diagnostics-button"),
   alert: $("#alert-banner"),
   alertTitle: $("#alert-title"),
   alertDetail: $("#alert-detail"),
@@ -62,6 +73,7 @@ const widgets = new WidgetManager({
   store
 });
 const demo = new DemoFeed(adapter);
+const diagnostics = new DiagnosticLog();
 
 let demoActive = false;
 let installPrompt = null;
@@ -77,7 +89,32 @@ function openConnectionDialog() {
   elements.connectionError.hidden = true;
   elements.connectionError.dataset.kind = "error";
   if (!elements.connectionDialog.open) elements.connectionDialog.showModal();
-  queueMicrotask(() => elements.host.focus());
+  queueMicrotask(() => elements.connectionDialog.querySelector(".close-button")?.focus({ preventScroll: true }));
+}
+
+function renderDiagnostics() {
+  const text = diagnostics.text();
+  const qrPayload = diagnostics.qrPayload();
+  elements.diagnosticsOutput.textContent = text;
+  elements.diagnosticsCount.textContent = `${diagnostics.entries.length} events`;
+  elements.diagnosticsQrSize.textContent = `${new TextEncoder().encode(qrPayload).length} bytes`;
+  elements.diagnosticsQr.replaceChildren();
+  try {
+    const factory = globalThis.qrcode;
+    if (typeof factory !== "function") throw new Error("QR generator unavailable");
+    factory.stringToBytes = factory.stringToBytesFuncs["UTF-8"];
+    const qr = factory(0, "M");
+    qr.addData(qrPayload, "Byte");
+    qr.make();
+    elements.diagnosticsQr.innerHTML = qr.createSvgTag(5, 20);
+  } catch (error) {
+    elements.diagnosticsQr.textContent = `QR generation failed: ${error.message}`;
+  }
+}
+
+function openDiagnostics() {
+  renderDiagnostics();
+  if (!elements.diagnosticsDialog.open) elements.diagnosticsDialog.showModal();
 }
 
 function renderDevices(devices) {
@@ -112,12 +149,14 @@ async function connectDevice(input) {
   elements.connectionError.hidden = true;
   elements.connectSubmit.disabled = true;
   setConnectionStatus("connecting", "Connecting");
+  diagnostics.add("info", "connection", "Connection requested", { device: input.authority || input.host || String(input) });
   try {
     await connection.connect(input);
     elements.connectionDialog.close();
     setConnectionStatus("connected", input.label || input.host || "Connected");
     showToast("Camera and telemetry are live.");
   } catch (error) {
+    diagnostics.add("error", "connection", error.message || "Connection failed", error);
     setConnectionStatus("offline", connection.retryCount > 0 ? "Retrying" : "Connection failed");
     elements.connectionError.dataset.kind = "error";
     elements.connectionError.textContent = error.message || "Connection failed.";
@@ -257,7 +296,37 @@ elements.discover.addEventListener("click", async () => {
     elements.discover.textContent = "Scan network";
   }
 });
-discovery.addEventListener("scanprogress", (event) => { elements.discover.textContent = event.detail; });
+discovery.addEventListener("scanstart", () => diagnostics.add("info", "discovery", "Network scan started"));
+discovery.addEventListener("scanprogress", (event) => {
+  elements.discover.textContent = event.detail;
+  diagnostics.add("info", "discovery", event.detail);
+});
+discovery.addEventListener("scancomplete", (event) => diagnostics.add("info", "discovery", "Network scan completed", {
+  devices: event.detail.map((device) => ({ address: device.authority, reachable: device.reachable }))
+}));
+elements.diagnostics.addEventListener("click", openDiagnostics);
+elements.connectionDiagnostics.addEventListener("click", openDiagnostics);
+elements.copyDiagnostics.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(diagnostics.text());
+    showToast("Diagnostic log copied.");
+  } catch {
+    showToast("Copy is unavailable; use Download instead.");
+  }
+});
+elements.downloadDiagnostics.addEventListener("click", () => {
+  const blob = new Blob([diagnostics.text()], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `opwebview-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+elements.clearDiagnostics.addEventListener("click", () => {
+  diagnostics.clear();
+  renderDiagnostics();
+});
 elements.demo.addEventListener("click", toggleDemo);
 elements.emptyDemo.addEventListener("click", startDemo);
 elements.edit.addEventListener("click", () => toggleEditing());
@@ -289,10 +358,14 @@ elements.fullscreen.addEventListener("click", async () => {
     else await document.documentElement.requestFullscreen();
   } catch { showToast("Fullscreen is not available in this browser."); }
 });
-elements.video.addEventListener("playing", () => elements.app.classList.add("video-ready"));
+elements.video.addEventListener("playing", () => {
+  elements.app.classList.add("video-ready");
+  diagnostics.add("info", "video", "First playable camera frame received");
+});
 elements.video.addEventListener("emptied", () => elements.app.classList.remove("video-ready"));
 store.addEventListener("change", updateUi);
 connection.addEventListener("state", (event) => {
+  diagnostics.add(event.detail === "failed" ? "error" : "info", "webrtc", `State changed to ${event.detail}`);
   if (demoActive) return;
   if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
   else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
@@ -301,12 +374,20 @@ connection.addEventListener("state", (event) => {
   else setConnectionStatus("disconnected", "Offline");
 });
 connection.addEventListener("progress", (event) => {
+  diagnostics.add("info", "webrtc", event.detail);
   if (!elements.connectionDialog.open) return;
   elements.connectionError.dataset.kind = "progress";
   elements.connectionError.textContent = event.detail;
   elements.connectionError.hidden = false;
 });
-connection.addEventListener("retry", (event) => showToast(`Connection lost. Retry ${event.detail} of 3…`));
+connection.addEventListener("retry", (event) => {
+  diagnostics.add("warn", "webrtc", `Connection lost; retry ${event.detail} of 3`);
+  showToast(`Connection lost. Retry ${event.detail} of 3…`);
+});
+window.addEventListener("error", (event) => diagnostics.add("error", "browser", event.message, {
+  file: event.filename?.split("/").at(-1), line: event.lineno, column: event.colno
+}));
+window.addEventListener("unhandledrejection", (event) => diagnostics.add("error", "browser", "Unhandled promise rejection", event.reason));
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && store.state.isConnected) connection.acquireWakeLock();
 });
@@ -339,15 +420,17 @@ if ("serviceWorker" in navigator) {
     try {
       const registration = await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
       await registration.update();
-    } catch {
+    } catch (error) {
+      diagnostics.add("error", "service-worker", "Offline caching could not be enabled", error);
       showToast("Offline caching could not be enabled in this browser.");
     }
   });
 }
 
 renderDevices(discovery.saved());
+diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 elements.layoutLabel.textContent = widgets.activeLabel();
 updateUi();
 
 // Exposed only for browser-driven smoke tests and diagnostics.
-globalThis.__OPWEBVIEW__ = { store, adapter, discovery, connection, renderer, widgets, demo };
+globalThis.__OPWEBVIEW__ = { store, adapter, discovery, connection, renderer, widgets, demo, diagnostics };
