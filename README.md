@@ -7,7 +7,7 @@ This first milestone includes:
 - WebRTC road-camera streaming with H.264 preference
 - Telemetry parsing for the stock on-road UI services
 - Canvas-based path, lane, road-edge, and lead-vehicle rendering
-- Nineteen live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
+- Twenty live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
 - Built-in Classic, Enhanced, and Detailed layouts adapted from gerrylum's OPView layouts branch
 - Named custom layouts saved locally, with recall, deletion, visibility controls, drag, resize, and preset-aware reset
 - Saved-device discovery with a `comma.local` probe and manual local-IP entry
