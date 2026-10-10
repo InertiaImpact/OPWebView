@@ -6,7 +6,7 @@ import { ConnectionManager } from "./core/connection-manager.js?v=2";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=2";
 import { DemoFeed } from "./demo.js?v=2";
-import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=1";
+import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=2";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -55,6 +55,8 @@ const elements = {
   copyDiagnostics: $("#copy-diagnostics-button"),
   downloadDiagnostics: $("#download-diagnostics-button"),
   clearDiagnostics: $("#clear-diagnostics-button"),
+  checkUpdate: $("#check-update-button"),
+  networkPermission: $("#network-permission-status"),
   alert: $("#alert-banner"),
   alertTitle: $("#alert-title"),
   alertDetail: $("#alert-detail"),
@@ -78,6 +80,32 @@ const diagnostics = new DiagnosticLog();
 let demoActive = false;
 let installPrompt = null;
 let toastTimer = null;
+let updateRegistration = null;
+let networkPermission = null;
+let updateReloadPending = false;
+
+function streamBusy() {
+  return connection.connecting || store.state.isConnected || Boolean(connection.retryTimer);
+}
+
+async function refreshNetworkPermission() {
+  try {
+    networkPermission = await navigator.permissions.query({ name: "local-network" });
+    networkPermission.onchange = () => refreshNetworkPermission();
+    const state = networkPermission.state;
+    elements.networkPermission.textContent = state === "denied"
+      ? "Local-network access is blocked. Open this site's Chrome settings and allow Local network access, then return here. No need to clear site data."
+      : state === "prompt"
+        ? "Press Connect or Scan network and allow Chrome's local-network prompt."
+        : "Local-network access is allowed.";
+    diagnostics.add(state === "denied" ? "warn" : "info", "permission", `Local-network permission: ${state}`);
+    return state;
+  } catch {
+    networkPermission = null;
+    elements.networkPermission.textContent = "Allow local-network access if your browser asks when connecting.";
+    return "unknown";
+  }
+}
 
 function setConnectionStatus(status, label) {
   elements.app.dataset.status = status;
@@ -85,6 +113,7 @@ function setConnectionStatus(status, label) {
 }
 
 function openConnectionDialog() {
+  refreshNetworkPermission();
   renderDevices(discovery.saved());
   elements.connectionError.hidden = true;
   elements.connectionError.dataset.kind = "error";
@@ -151,6 +180,9 @@ async function connectDevice(input) {
   setConnectionStatus("connecting", "Connecting");
   diagnostics.add("info", "connection", "Connection requested", { device: input.authority || input.host || String(input) });
   try {
+    if (await refreshNetworkPermission() === "denied") {
+      throw new Error("Local-network access is blocked in Chrome's settings for this site. Allow it there and retry; your offline files and layouts can stay saved.");
+    }
     await connection.connect(input);
     elements.connectionDialog.close();
     setConnectionStatus("connected", input.label || input.host || "Connected");
@@ -163,6 +195,7 @@ async function connectDevice(input) {
     elements.connectionError.hidden = false;
   } finally {
     elements.connectSubmit.disabled = false;
+    applyReadyUpdate();
   }
 }
 
@@ -290,6 +323,10 @@ elements.discover.addEventListener("click", async () => {
   elements.discover.disabled = true;
   elements.discover.textContent = "Scanning…";
   try {
+    if (await refreshNetworkPermission() === "denied") {
+      showToast("Allow Local network access in this site's Chrome settings before scanning.");
+      return;
+    }
     renderDevices(await discovery.scan());
   } finally {
     elements.discover.disabled = false;
@@ -390,6 +427,10 @@ window.addEventListener("error", (event) => diagnostics.add("error", "browser", 
 window.addEventListener("unhandledrejection", (event) => diagnostics.add("error", "browser", "Unhandled promise rejection", event.reason));
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && store.state.isConnected) connection.acquireWakeLock();
+  if (document.visibilityState === "visible") {
+    refreshNetworkPermission();
+    checkForUpdates();
+  }
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -405,12 +446,47 @@ elements.install.addEventListener("click", async () => {
 });
 window.addEventListener("appinstalled", () => showToast("OP WebView installed for offline launch."));
 
+function applyReadyUpdate() {
+  if (streamBusy()) return;
+  if (updateReloadPending) {
+    window.location.reload();
+    return;
+  }
+  if (updateRegistration?.waiting) {
+    diagnostics.add("info", "service-worker", "Complete update ready; activating while idle");
+    updateRegistration.waiting.postMessage({ type: "ACTIVATE_UPDATE" });
+  }
+}
+
+async function checkForUpdates(manual = false) {
+  if (!updateRegistration) return;
+  try {
+    await updateRegistration.update();
+    diagnostics.add("info", "service-worker", "Update check completed", { waiting: Boolean(updateRegistration.waiting) });
+    applyReadyUpdate();
+    if (manual) showToast(updateRegistration.waiting || updateRegistration.installing
+      ? "Update downloading or ready. It will apply when disconnected."
+      : "Update check complete. Your saved offline app is ready.");
+  } catch (error) {
+    diagnostics.add("info", "service-worker", "Update server unavailable; keeping saved offline app", error);
+    if (manual) showToast("Update server unavailable. Your saved offline app is still available.");
+  }
+}
+
+elements.checkUpdate.addEventListener("click", () => checkForUpdates(true));
+window.addEventListener("online", () => checkForUpdates());
+connection.addEventListener("state", () => {
+  // Manager finishes changing its connecting state after emitting events.
+  setTimeout(applyReadyUpdate, 0);
+});
+
 if ("serviceWorker" in navigator) {
   let serviceWorkerRefreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (serviceWorkerRefreshing) return;
     serviceWorkerRefreshing = true;
-    if (store.state.isConnected) {
+    if (streamBusy()) {
+      updateReloadPending = true;
       showToast("Update ready. Reopen OP WebView after this drive.", 8000);
       return;
     }
@@ -418,17 +494,33 @@ if ("serviceWorker" in navigator) {
   });
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
-      await registration.update();
+      updateRegistration = await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
+      updateRegistration.addEventListener("updatefound", () => {
+        const worker = updateRegistration.installing;
+        worker?.addEventListener("statechange", () => {
+          if (worker.state === "installed") {
+            diagnostics.add("info", "service-worker", "Complete release downloaded for offline use");
+            applyReadyUpdate();
+          }
+        });
+      });
+      await checkForUpdates();
     } catch (error) {
-      diagnostics.add("error", "service-worker", "Offline caching could not be enabled", error);
-      showToast("Offline caching could not be enabled in this browser.");
+      updateRegistration = await navigator.serviceWorker.getRegistration();
+      if (updateRegistration?.active) {
+        diagnostics.add("info", "service-worker", "Started from saved offline release; update server unavailable", error);
+        applyReadyUpdate();
+      } else {
+        diagnostics.add("error", "service-worker", "Offline caching could not be enabled", error);
+        showToast("Offline caching could not be enabled in this browser.");
+      }
     }
   });
 }
 
 renderDevices(discovery.saved());
 diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
+refreshNetworkPermission();
 elements.layoutLabel.textContent = widgets.activeLabel();
 updateUi();
 

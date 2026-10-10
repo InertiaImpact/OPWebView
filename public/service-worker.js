@@ -1,4 +1,4 @@
-const CACHE_NAME = "opwebview-shell-v13";
+const CACHE_NAME = "opwebview-shell-v14";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,14 +6,14 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  "./src/app.js?v=9",
+  "./src/app.js?v=10",
   "./src/demo.js?v=2",
   "./src/core/state.js?v=2",
   "./src/core/telemetry-adapter.js?v=2",
   "./src/core/device-discovery.js?v=2",
   "./src/core/webrtc-transport.js?v=4",
   "./src/core/connection-manager.js?v=2",
-  "./src/core/diagnostic-log.js?v=1",
+  "./src/core/diagnostic-log.js?v=2",
   "./src/render/projection.js",
   "./src/render/overlay-renderer.js",
   "./src/widgets/widget-manager.js?v=2",
@@ -23,13 +23,26 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  // Populate an entire release from the network, bypassing the HTTP cache.
+  // A failed install leaves the previous worker and offline shell intact.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) =>
+    cache.addAll(APP_SHELL.map((url) => new Request(url, { cache: "reload" })))
+  ));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      // Keep the preceding release available for existing tabs during handoff.
+      // Only prune this app's caches; never clear site data or other caches.
+      .then((keys) => Promise.all(keys.filter((key) => {
+        const version = key.match(/^opwebview-shell-v(\d+)$/);
+        return version && Number(version[1]) < Number(CACHE_NAME.split("-v")[1]) - 1;
+      }).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -37,12 +50,19 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // All navigation URLs, including ?v= links, boot the same complete release.
+    // Assets also come from that release, avoiding old/new module mixtures.
+    const cached = event.request.mode === "navigate"
+      ? await cache.match("./index.html")
+      : await cache.match(event.request);
+    if (cached) return cached;
+    try {
+      return await fetch(event.request, { cache: "no-store" });
+    } catch {
+      // Never return HTML in place of a missing JavaScript module or stylesheet.
+      return new Response("Resource unavailable offline", { status: 503 });
+    }
+  })());
 });

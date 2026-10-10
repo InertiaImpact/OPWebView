@@ -85,6 +85,7 @@
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
         <p class="dialog-copy">Your device must be on the same network with <code>webrtcd</code> reachable on port 5001.</p>
+        <p id="network-permission-status" class="dialog-copy" aria-live="polite"></p>
 
         <label class="field-label" for="device-host">Hostname or local IP</label>
         <div class="host-row">
@@ -161,6 +162,7 @@
           </section>
         </div>
         <div class="diagnostics-actions">
+          <button id="check-update-button" class="secondary-button" type="button">Check for updates</button>
           <button id="copy-diagnostics-button" class="primary-button" type="button">Copy log</button>
           <button id="download-diagnostics-button" class="secondary-button" type="button">Download</button>
           <button id="clear-diagnostics-button" class="secondary-button danger-button" type="button">Clear</button>
@@ -171,6 +173,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=9"></script>
+    <script type="module" src="./src/app.js?v=10"></script>
   </body>
 </html>
