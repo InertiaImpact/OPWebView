@@ -1,6 +1,6 @@
 {
-  "name": "OP WebView",
-  "short_name": "OP WebView",
+  "name": "OP WebView DEV",
+  "short_name": "OP WebView DEV",
   "description": "Local-first openpilot camera streaming and telemetry overlay.",
   "id": "./",
   "start_url": "./",

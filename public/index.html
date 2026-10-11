@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-channel="dev">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -9,10 +9,25 @@
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
     <link rel="stylesheet" href="./styles.css?v=6" />
-    <title>OP WebView</title>
+    <title>OP WebView DEV</title>
+    <style>
+      .dev-watermark {
+        position: fixed;
+        inset: 50% auto auto 50%;
+        transform: translate(-50%, -50%);
+        z-index: 40;
+        pointer-events: none;
+        user-select: none;
+        font: 700 12px/1 Arial, sans-serif;
+        letter-spacing: .2em;
+        color: rgba(255, 255, 255, .45);
+        text-shadow: 0 1px 3px #000;
+      }
+    </style>
   </head>
   <body>
     <main id="app" class="app" data-status="disconnected">
+      <div class="dev-watermark" aria-label="Development version">DEV</div>
       <section class="viewport" aria-label="openpilot road view">
         <div class="video-backdrop" aria-hidden="true"></div>
         <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
