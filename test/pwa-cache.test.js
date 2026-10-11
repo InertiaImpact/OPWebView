@@ -13,7 +13,7 @@ test("the page and offline shell use the current versioned application modules",
   assert.match(worker, /src\/app\.js\?v=12/);
   assert.match(app, /core\/webrtc-transport\.js\?v=4/);
   assert.match(worker, /core\/webrtc-transport\.js\?v=4/);
-  assert.match(worker, /const CACHE_VERSION = 21/);
+  assert.match(worker, /const CACHE_VERSION = 22/);
   assert.match(app, /core\/device-discovery\.js\?v=2/);
   assert.match(worker, /core\/device-discovery\.js\?v=2/);
   assert.match(app, /core\/connection-manager\.js\?v=2/);

@@ -1,6 +1,6 @@
 const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
 const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
-const CACHE_VERSION = 21;
+const CACHE_VERSION = 22;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
@@ -58,7 +58,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   // The root worker must not substitute the stable shell for a first dev visit.
   const scope = new URL("./", self.location.href).pathname;
-  if (!url.pathname.startsWith(scope) || (!IS_DEV && url.pathname.startsWith(`${scope}dev/`))) return;
+  const devPath = `${scope}dev`;
+  if (!url.pathname.startsWith(scope) || (!IS_DEV &&
+    (url.pathname === devPath || url.pathname.startsWith(`${devPath}/`)))) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     // All navigation URLs, including ?v= links, boot the same complete release.
