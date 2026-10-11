@@ -3,6 +3,7 @@ import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, presetGeometry, 
 
 import { storageKey } from "../core/app-channel.js";
 import { IndicatorSmoother } from "./indicator-smoothing.js";
+import { browserStorage, readStored, writeStored, removeStored } from "../core/storage.js";
 const STORAGE_KEY = storageKey("opwebview.layout.v2");
 const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
 const LEGACY_KEY = storageKey("opwebview.layout.v1");
@@ -10,7 +11,7 @@ const LEGACY_KEY = storageKey("opwebview.layout.v1");
 export { WIDGETS, BUILT_IN_LAYOUTS, createPresetLayout, sanitizeLayoutName };
 
 export class WidgetManager extends EventTarget {
-  constructor({ layer, toggles, store, storage = globalThis.localStorage }) {
+  constructor({ layer, toggles, store, storage = browserStorage() }) {
     super();
     this.layer = layer;
     this.toggles = toggles;
@@ -38,26 +39,32 @@ export class WidgetManager extends EventTarget {
   }
 
   loadLayout() {
-    try {
-      const saved = JSON.parse(this.storage.getItem(STORAGE_KEY) || "null");
-      if (saved?.layout) return { layout: normalizeLayout(saved.layout), activeLayout: saved.activeLayout || "custom" };
-    } catch {}
-    try {
-      const legacy = JSON.parse(this.storage.getItem(LEGACY_KEY) || "null");
-      if (legacy) {
-        const migrated = createPresetLayout("classic");
-        for (const widget of WIDGETS) {
-          if (!legacy[widget.id]) migrated[widget.id].hidden = true;
-          else migrated[widget.id] = { ...migrated[widget.id], ...legacy[widget.id] };
-        }
-        return { layout: migrated, activeLayout: "custom" };
+    const saved = readStored(this.storage, STORAGE_KEY, null, (value) => {
+      if (!value || (value.version !== undefined && value.version !== 2) || !isLayout(value.layout)) return null;
+      const active = typeof value.activeLayout === "string" ? value.activeLayout : "custom";
+      const activeLayout = Object.hasOwn(BUILT_IN_LAYOUTS, active) || active === "custom" ||
+        (active.startsWith("saved:") && active.slice(6) && sanitizeLayoutName(active.slice(6)) === active.slice(6)) ? active : "custom";
+      return { version: 2, activeLayout, layout: normalizeLayout(value.layout, Object.hasOwn(BUILT_IN_LAYOUTS, activeLayout) ? activeLayout : "classic") };
+    });
+    if (saved) return saved;
+    const legacy = readStored(this.storage, LEGACY_KEY, null, (value) => isLayout(value) ? value : null);
+    if (legacy) {
+      const migrated = createPresetLayout("classic");
+      for (const widget of WIDGETS) {
+        if (!legacy[widget.id]) migrated[widget.id].hidden = true;
+        else migrated[widget.id] = { ...migrated[widget.id], ...legacy[widget.id] };
       }
-    } catch {}
+      const record = { version: 2, layout: normalizeLayout(migrated), activeLayout: "custom" };
+      writeStored(this.storage, STORAGE_KEY, record);
+      // Keep the old record if migration could not be persisted.
+      try { if (this.storage?.getItem(STORAGE_KEY) === JSON.stringify(record)) removeStored(this.storage, LEGACY_KEY); } catch {}
+      return record;
+    }
     return { layout: createPresetLayout("classic"), activeLayout: "classic" };
   }
 
   save() {
-    this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, activeLayout: this.activeLayout, layout: this.layout }));
+    writeStored(this.storage, STORAGE_KEY, { version: 2, activeLayout: this.activeLayout, layout: this.layout });
   }
 
   build() {
@@ -222,6 +229,7 @@ export class WidgetManager extends EventTarget {
     this.activeLayout = id;
     this.applyAll();
     this.save();
+    if (this.editing) { this.setEditing(true); this.render(); }
     this.emitLayoutChange();
     return true;
   }
@@ -231,20 +239,19 @@ export class WidgetManager extends EventTarget {
   }
 
   namedLayouts() {
-    try {
-      const saved = JSON.parse(this.storage.getItem(NAMED_KEY) || "{}");
-      return saved && typeof saved === "object" ? saved : {};
-    } catch {
-      return {};
-    }
+    return readStored(this.storage, NAMED_KEY, {}, (saved) => {
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+      return Object.fromEntries(Object.entries(saved).filter(([name, layout]) =>
+        name && sanitizeLayoutName(name) === name && isLayout(layout)).map(([name, layout]) => [name, normalizeLayout(layout)]));
+    });
   }
 
   saveNamed(rawName) {
     const name = sanitizeLayoutName(rawName);
     if (!name) return null;
     const layouts = this.namedLayouts();
-    layouts[name] = normalizeLayout(this.displayMode === "full" ? this.presentedLayout || this.layout : this.layout);
-    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    Object.defineProperty(layouts, name, { value: normalizeLayout(this.displayMode === "full" ? this.presentedLayout || this.layout : this.layout), enumerable: true, configurable: true, writable: true });
+    writeStored(this.storage, NAMED_KEY, layouts);
     this.activeLayout = `saved:${name}`;
     this.save();
     this.emitLayoutChange();
@@ -252,7 +259,8 @@ export class WidgetManager extends EventTarget {
   }
 
   applyNamed(name) {
-    const saved = this.namedLayouts()[name];
+    const layouts = this.namedLayouts();
+    const saved = Object.hasOwn(layouts, name) ? layouts[name] : null;
     if (!saved) return false;
     this.layout = normalizeLayout(saved);
     this.activeLayout = `saved:${name}`;
@@ -264,9 +272,9 @@ export class WidgetManager extends EventTarget {
 
   deleteNamed(name) {
     const layouts = this.namedLayouts();
-    if (!layouts[name]) return false;
+    if (!Object.hasOwn(layouts, name)) return false;
     delete layouts[name];
-    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    writeStored(this.storage, NAMED_KEY, layouts);
     if (this.activeLayout === `saved:${name}`) this.activeLayout = "custom";
     this.save();
     this.emitLayoutChange();
@@ -315,7 +323,7 @@ export class WidgetManager extends EventTarget {
   }
 
   markCustom() {
-    if (BUILT_IN_LAYOUTS[this.activeLayout] && this.presentedLayout && this.displayMode === "full") this.layout = structuredClone(this.presentedLayout);
+    if (!this.editing && BUILT_IN_LAYOUTS[this.activeLayout] && this.presentedLayout && this.displayMode === "full") this.layout = structuredClone(this.presentedLayout);
     this.activeLayout = "custom";
     this.presentedLayout = this.layout;
     this.layer.dataset.layout = "custom";
@@ -369,6 +377,11 @@ export class WidgetManager extends EventTarget {
     target.addEventListener("pointerup", end);
     target.addEventListener("pointercancel", end);
   }
+}
+
+function isLayout(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && WIDGETS.some(({ id }) =>
+    Object.hasOwn(value, id) && value[id] && typeof value[id] === "object" && !Array.isArray(value[id]));
 }
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));

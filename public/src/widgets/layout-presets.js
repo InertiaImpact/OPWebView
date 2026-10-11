@@ -110,16 +110,19 @@ export function createPresetLayout(id) {
 
 export function normalizeLayout(candidate, fallback = "classic") {
   const result = createPresetLayout(fallback);
-  if (!candidate || typeof candidate !== "object") return result;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return result;
   for (const widget of WIDGETS) {
     const saved = candidate[widget.id];
-    if (!saved || typeof saved !== "object") continue;
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) continue;
+    const width = finite(saved.w, result[widget.id].w);
+    const height = finite(saved.h, result[widget.id].h);
+    const w = Math.min(100, width > 0 ? width : result[widget.id].w);
+    const h = Math.min(100, height > 0 ? height : result[widget.id].h);
     result[widget.id] = {
-      x: finite(saved.x, result[widget.id].x),
-      y: finite(saved.y, result[widget.id].y),
-      w: finite(saved.w, result[widget.id].w),
-      h: finite(saved.h, result[widget.id].h),
-      hidden: Boolean(saved.hidden)
+      x: Math.max(0, Math.min(100 - w, finite(saved.x, result[widget.id].x))),
+      y: Math.max(0, Math.min(100 - h, finite(saved.y, result[widget.id].y))),
+      w, h,
+      hidden: typeof saved.hidden === "boolean" ? saved.hidden : result[widget.id].hidden
     };
   }
   return result;
@@ -129,4 +132,5 @@ export function sanitizeLayoutName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, 40);
 }
 
-const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const finite = (value, fallback) =>
+  (typeof value === "number" || (typeof value === "string" && value.trim())) && Number.isFinite(Number(value)) ? Number(value) : fallback;

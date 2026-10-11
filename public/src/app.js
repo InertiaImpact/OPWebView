@@ -11,10 +11,14 @@ import { ViewportController } from "./core/viewport-controller.js";
 import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
 import { DevWatermark } from "./core/dev-watermark.js";
+import { installLayoutGesture } from "./core/layout-gesture.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
   app: $("#app"),
+  viewport: $(".viewport"),
+  devicePanel: $("#device-panel"),
+  widgetPanel: $("#widget-panel"),
   video: $("#road-video"),
   canvas: $("#model-overlay"),
   connectionPill: $("#connection-pill"),
@@ -26,23 +30,13 @@ const elements = {
   deviceList: $("#device-list"),
   discover: $("#discover-button"),
   connect: $("#connect-button"),
-  emptyConnect: $("#empty-connect"),
   demo: $("#demo-button"),
-  emptyDemo: $("#empty-demo"),
-  edit: $("#edit-button"),
-  editIcon: $("#edit-icon"),
-  editLabel: $("#edit-label"),
-  layoutButton: $("#layout-button"),
   layoutLabel: $("#layout-label"),
   editTray: $("#edit-tray"),
   doneEditing: $("#done-editing-button"),
   resetLayout: $("#reset-layout-button"),
-  widgets: $("#widgets-button"),
-  editLayouts: $("#edit-layouts-button"),
-  widgetDialog: $("#widget-dialog"),
   widgetLayer: $("#widget-layer"),
   widgetToggles: $("#widget-toggles"),
-  layoutDialog: $("#layout-dialog"),
   layoutPresets: $("#layout-presets"),
   savedLayouts: $("#saved-layouts"),
   layoutName: $("#layout-name"),
@@ -64,7 +58,6 @@ const elements = {
   networkPermission: $("#network-permission-status"),
   startupStatus: $("#startup-status"),
   startupMessage: $("#startup-message"),
-  startupScan: $("#startup-scan"),
   startupCancel: $("#startup-cancel"),
   alert: $("#alert-banner"),
   alertTitle: $("#alert-title"),
@@ -87,9 +80,14 @@ const demo = new DemoFeed(adapter);
 const diagnostics = new DiagnosticLog();
 const devWatermark = new DevWatermark($(".dev-watermark"));
 const viewport = new ViewportController({ app: elements.app, video: elements.video, renderer, widgets,
-  onChange: (detail) => diagnostics.add("info", "viewport", `Presentation changed to ${detail.mode}`, detail) });
+  onChange: (detail) => {
+    if (detail.mode !== "full" && widgets.editing) toggleEditing(false);
+    diagnostics.add("info", "viewport", `Presentation changed to ${detail.mode}`, detail);
+  } });
 
 let demoActive = false;
+let devicePanelOpen = true;
+let listedDevices = discovery.saved();
 let installPrompt = null;
 let toastTimer = null;
 let updateRegistration = null;
@@ -102,7 +100,6 @@ const startup = new StartupConnection({ discovery,
   status: (state, message) => {
     elements.startupStatus.hidden = state === "idle";
     elements.startupMessage.textContent = message || "";
-    elements.startupScan.hidden = !["permission", "not-found"].includes(state);
     elements.startupCancel.hidden = !["scanning", "waiting"].includes(state);
     if (state !== "idle") diagnostics.add(state === "permission" ? "warn" : "info", "startup", message || state);
   }
@@ -140,10 +137,15 @@ function setConnectionStatus(status, label) {
   elements.connectionPill.textContent = label;
 }
 
+function syncDevicePanel() {
+  elements.devicePanel.hidden = widgets.editing || !devicePanelOpen;
+  elements.controlsToggle.hidden = widgets.editing;
+  elements.controlsToggle.setAttribute("aria-expanded", String(!elements.devicePanel.hidden));
+}
+
 function openConnectionDialog() {
   startup.cancel();
   refreshNetworkPermission();
-  renderDevices(discovery.saved());
   elements.connectionError.hidden = true;
   elements.connectionError.dataset.kind = "error";
   if (!elements.connectionDialog.open) elements.connectionDialog.showModal();
@@ -176,11 +178,15 @@ function openDiagnostics() {
 }
 
 function renderDevices(devices) {
+  listedDevices = devices;
+  const available = devices.some((device) => device.reachable === true);
+  elements.demo.hidden = available;
+  if (available && demoActive) stopDemo();
   elements.deviceList.replaceChildren();
   if (!devices.length) {
     const empty = document.createElement("p");
     empty.className = "device-empty";
-    empty.textContent = "No saved device yet. Enter its local address or scan for a known hostname.";
+    empty.textContent = "Looking for your comma… Use + to enter an IP address.";
     elements.deviceList.append(empty);
     return;
   }
@@ -191,11 +197,12 @@ function renderDevices(devices) {
     const name = document.createElement("strong");
     name.textContent = device.displayName || device.label || device.host;
     const address = document.createElement("span");
-    address.textContent = `${device.authority}${device.reachable === true ? " · available" : device.reachable === false ? " · not found" : ""}`;
+    address.textContent = `${device.authority}${device.reachable === true ? " · available" : device.reachable === false ? " · not found" : " · checking"}`;
     summary.append(name, address);
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Connect";
+    button.disabled = connection.connecting;
     button.addEventListener("click", () => connectDevice(device));
     card.append(summary, button);
     elements.deviceList.append(card);
@@ -206,9 +213,13 @@ async function connectDevice(input, { automatic = false } = {}) {
   if (!automatic) startup.cancel();
   if (connection.connecting) return;
   stopDemo();
+  if (elements.connectionDialog.open) elements.connectionDialog.close();
+  devicePanelOpen = true;
+  syncDevicePanel();
   elements.connectionError.hidden = true;
   elements.connectSubmit.disabled = true;
   setConnectionStatus("connecting", "Connecting");
+  renderDevices(listedDevices);
   diagnostics.add("info", "connection", "Connection requested", { device: input.authority || input.host || String(input) });
   try {
     if (await refreshNetworkPermission() === "denied") {
@@ -217,6 +228,8 @@ async function connectDevice(input, { automatic = false } = {}) {
     await connection.connect(input);
     elements.connectionDialog.close();
     setConnectionStatus("connected", input.label || input.host || "Connected");
+    devicePanelOpen = false;
+    syncDevicePanel();
     showToast("Camera and telemetry are live.");
     return true;
   } catch (error) {
@@ -225,10 +238,12 @@ async function connectDevice(input, { automatic = false } = {}) {
     elements.connectionError.dataset.kind = "error";
     elements.connectionError.textContent = error.message || "Connection failed.";
     elements.connectionError.hidden = false;
-    if (automatic && !elements.connectionDialog.open) elements.connectionDialog.showModal();
+    devicePanelOpen = true;
+    syncDevicePanel();
     return false;
   } finally {
     elements.connectSubmit.disabled = false;
+    renderDevices(listedDevices);
     applyReadyUpdate();
   }
 }
@@ -241,6 +256,8 @@ function startDemo() {
   elements.demo.setAttribute("aria-pressed", "true");
   setConnectionStatus("connected", "Demo");
   demo.start();
+  devicePanelOpen = false;
+  syncDevicePanel();
 }
 
 function stopDemo() {
@@ -251,6 +268,8 @@ function stopDemo() {
   elements.demo.setAttribute("aria-pressed", "false");
   store.resetTelemetry();
   setConnectionStatus("disconnected", "Offline");
+  devicePanelOpen = true;
+  syncDevicePanel();
 }
 
 function toggleDemo() {
@@ -282,11 +301,6 @@ function updateUi() {
   }
 }
 
-function openLayoutDialog() {
-  renderLayoutDialog();
-  if (!elements.layoutDialog.open) elements.layoutDialog.showModal();
-}
-
 function renderLayoutDialog() {
   elements.layoutPresets.replaceChildren();
   for (const [id, preset] of Object.entries(BUILT_IN_LAYOUTS)) {
@@ -297,8 +311,6 @@ function renderLayoutDialog() {
     button.innerHTML = `<strong>${preset.name}</strong><span>${preset.description}</span>`;
     button.addEventListener("click", () => {
       widgets.applyPreset(id);
-      elements.app.classList.remove("controls-open");
-      elements.controlsToggle.setAttribute("aria-expanded", "false");
       renderLayoutDialog();
       showToast(`${preset.name} layout recalled.`);
     });
@@ -348,10 +360,11 @@ function toggleEditing(force) {
   const editing = typeof force === "boolean" ? force : !widgets.editing;
   if (editing) startup.cancel();
   widgets.setEditing(editing);
-  elements.edit.setAttribute("aria-pressed", String(editing));
-  elements.editIcon.textContent = editing ? "🔓" : "🔒";
-  elements.editLabel.textContent = editing ? "Editing" : "Unlock";
+  elements.app.classList.toggle("layout-editing", editing);
   elements.editTray.hidden = !editing;
+  elements.widgetPanel.hidden = !editing;
+  if (editing) renderLayoutDialog();
+  syncDevicePanel();
 }
 
 elements.connectionForm.addEventListener("submit", (event) => {
@@ -363,8 +376,8 @@ elements.connectionForm.addEventListener("submit", (event) => {
   connectDevice(elements.host.value);
 });
 elements.connect.addEventListener("click", openConnectionDialog);
-elements.emptyConnect.addEventListener("click", openConnectionDialog);
 elements.discover.addEventListener("click", async () => {
+  if (!streamBusy() && !demoActive) { await startup.start(); return; }
   startup.cancel();
   elements.discover.disabled = true;
   elements.discover.textContent = "Scanning…";
@@ -379,20 +392,30 @@ elements.discover.addEventListener("click", async () => {
     elements.discover.textContent = "Scan network";
   }
 });
-elements.startupScan.addEventListener("click", () => startup.start());
 elements.startupCancel.addEventListener("click", () => {
   startup.cancel();
   showToast("Automatic connection cancelled. Use Connect when ready.");
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden) startup.cancel(); });
-discovery.addEventListener("scanstart", () => diagnostics.add("info", "discovery", "Network scan started"));
+discovery.addEventListener("scanstart", () => {
+  elements.discover.disabled = true;
+  diagnostics.add("info", "discovery", "Network scan started");
+});
 discovery.addEventListener("scanprogress", (event) => {
   elements.discover.textContent = event.detail;
   diagnostics.add("info", "discovery", event.detail);
 });
-discovery.addEventListener("scancomplete", (event) => diagnostics.add("info", "discovery", "Network scan completed", {
-  devices: event.detail.map((device) => ({ address: device.authority, reachable: device.reachable }))
-}));
+discovery.addEventListener("devicefound", (event) => renderDevices([
+  event.detail, ...listedDevices.filter((device) => device.authority !== event.detail.authority)
+]));
+discovery.addEventListener("scancomplete", (event) => {
+  elements.discover.disabled = false;
+  elements.discover.textContent = "Scan network";
+  renderDevices(event.detail);
+  diagnostics.add("info", "discovery", "Network scan completed", {
+    devices: event.detail.map((device) => ({ address: device.authority, reachable: device.reachable }))
+  });
+});
 elements.diagnostics.addEventListener("click", openDiagnostics);
 elements.connectionDiagnostics.addEventListener("click", openDiagnostics);
 elements.copyDiagnostics.addEventListener("click", async () => {
@@ -417,16 +440,11 @@ elements.clearDiagnostics.addEventListener("click", () => {
   renderDiagnostics();
 });
 elements.demo.addEventListener("click", toggleDemo);
-elements.emptyDemo.addEventListener("click", startDemo);
-elements.edit.addEventListener("click", () => toggleEditing());
 elements.doneEditing.addEventListener("click", () => toggleEditing(false));
 elements.resetLayout.addEventListener("click", () => {
   widgets.reset();
   showToast("Widget layout reset.");
 });
-elements.widgets.addEventListener("click", () => elements.widgetDialog.showModal());
-elements.layoutButton.addEventListener("click", openLayoutDialog);
-elements.editLayouts.addEventListener("click", openLayoutDialog);
 elements.saveLayout.addEventListener("click", () => {
   const name = widgets.saveNamed(elements.layoutName.value);
   if (!name) {
@@ -440,19 +458,20 @@ elements.saveLayout.addEventListener("click", () => {
 });
 widgets.addEventListener("layoutchange", () => {
   elements.layoutLabel.textContent = widgets.activeLabel();
+  if (widgets.editing) renderLayoutDialog();
   viewport.refresh();
 });
 
 elements.controlsToggle.addEventListener("click", () => {
-  const open = elements.app.classList.toggle("controls-open");
-  elements.controlsToggle.setAttribute("aria-expanded", String(open));
+  devicePanelOpen = !devicePanelOpen;
+  syncDevicePanel();
 });
 async function enterFullscreen() {
   if (document.fullscreenElement) return;
   try {
     await document.documentElement.requestFullscreen();
-    elements.app.classList.remove("controls-open");
-    elements.controlsToggle.setAttribute("aria-expanded", "false");
+    devicePanelOpen = false;
+    syncDevicePanel();
     viewport.refresh();
   } catch { showToast("Fullscreen is not available in this browser."); }
 }
@@ -465,14 +484,21 @@ elements.fullscreen.addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await enterFullscreen();
-    elements.app.classList.remove("controls-open");
-    elements.controlsToggle.setAttribute("aria-expanded", "false");
     viewport.refresh();
   } catch { showToast("Fullscreen is not available in this browser."); }
 });
 document.addEventListener("fullscreenchange", () => {
   elements.fullscreen.setAttribute("aria-pressed", String(Boolean(document.fullscreenElement)));
   elements.fullscreen.setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Toggle fullscreen");
+});
+installLayoutGesture({ target: elements.viewport,
+  enabled: () => !document.hidden && !widgets.editing && elements.app.dataset.presentation === "full",
+  unlock: () => toggleEditing(true)
+});
+document.addEventListener("keydown", (event) => {
+  if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  if (event.key === "Escape" && widgets.editing) toggleEditing(false);
+  if (event.shiftKey && event.key.toLowerCase() === "l") { event.preventDefault(); toggleEditing(); }
 });
 elements.video.addEventListener("playing", () => {
   elements.app.classList.add("video-ready");
@@ -489,7 +515,11 @@ connection.addEventListener("state", (event) => {
   if (demoActive) return;
   if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
   else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
-  else if (event.detail === "failed") setConnectionStatus("offline", connection.retryCount > 0 ? "Reconnecting" : "Connection failed");
+  else if (event.detail === "failed") {
+    setConnectionStatus("offline", connection.retryCount > 0 ? "Reconnecting" : "Connection failed");
+    devicePanelOpen = true;
+    syncDevicePanel();
+  }
   else if (event.detail === "offline") setConnectionStatus("offline", "Offline");
   else setConnectionStatus("disconnected", "Offline");
 });
@@ -606,6 +636,7 @@ diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 refreshNetworkPermission();
 window.addEventListener("load", () => startup.start(), { once: true });
 elements.layoutLabel.textContent = widgets.activeLabel();
+syncDevicePanel();
 updateUi();
 
 // Exposed only for browser-driven smoke tests and diagnostics.

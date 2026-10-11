@@ -1,6 +1,6 @@
 export function installFullscreenGesture({ target, enabled, enter, now = () => performance.now() }) {
   let down = null, previous = null;
-  const blocked = (event) => event.target.closest?.("button, input, select, textarea, a, dialog, [contenteditable]");
+  const blocked = (event) => event.target.closest?.("button, input, select, textarea, a, dialog, .floating-panel, [contenteditable]");
   const onDown = (event) => {
     if (!enabled() || blocked(event) || event.isPrimary === false || event.button > 0) { down = previous = null; return; }
     down = { id: event.pointerId, x: event.clientX, y: event.clientY, at: now() };

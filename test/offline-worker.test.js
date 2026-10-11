@@ -65,9 +65,9 @@ test("offline navigation with a new query and scripts use the same installed rel
   const runtime = worker();
   await runtime.install();
   const page = await runtime.request("?v=another-release", "navigate");
-  const script = await runtime.request("src/app.js?v=13");
+  const script = await runtime.request("src/app.js?v=15");
   assert.match(await page.text(), /index\.html/);
-  assert.match(await script.text(), /app\.js\?v=13/);
+  assert.match(await script.text(), /app\.js\?v=15/);
   assert.equal(runtime.networkCalls, 0);
   assert.equal(runtime.skipped, false);
 });
@@ -83,11 +83,11 @@ test("stable worker leaves development navigation to the network or dev worker",
 });
 
 test("dev offline shell and cache cleanup never touch stable caches", async () => {
-  const runtime = worker({ root: `${base}dev/`, cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v24", "opwebview-dev-shell-v1", "opwebview-dev-shell-v24"] });
+  const runtime = worker({ root: `${base}dev/`, cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v26", "opwebview-dev-shell-v1", "opwebview-dev-shell-v26"] });
   await runtime.install();
   await runtime.activate();
   assert.deepEqual(runtime.deleted, ["opwebview-dev-shell-v1"]);
-  assert.ok(runtime.opened.every((name) => name === "opwebview-dev-shell-v25"));
+  assert.ok(runtime.opened.every((name) => name === "opwebview-dev-shell-v27"));
   assert.match(await (await runtime.request("", "navigate")).text(), /\/dev\/index\.html/);
 });
 

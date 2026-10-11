@@ -33,7 +33,7 @@ export class StartupConnection {
       if (!current()) return;
       if (permission === "denied") {
         this.running = false;
-        this.status("permission", "Local-network access is blocked. Allow it in this site's browser settings, then tap Scan & connect.");
+        this.status("permission", "Local-network access is blocked. Allow it in this site's browser settings, then tap Scan network.");
         return;
       }
       // A local fetch is the permission request: there is no web Permissions
@@ -49,7 +49,7 @@ export class StartupConnection {
         try {
           const success = await this.connect(device);
           if (generation === this.generation) this.status(success === false ? "not-found" : "idle",
-            success === false ? "Automatic connection failed. Use Connect or Scan & connect to retry." : "");
+            success === false ? "Automatic connection failed. Use Connect or Scan network to retry." : "");
         } catch (error) {
           if (generation === this.generation) this.status("not-found", `Connection failed: ${error.message}`);
         }
@@ -66,7 +66,7 @@ export class StartupConnection {
           this.timer = null;
           if (!current()) return;
           if (await this.discovery.probe(chosen, 1300, this.controller.signal)) await connect(chosen);
-          else if (current()) { this.running = false; this.status("not-found", "The discovered comma is no longer available. Tap Scan & connect to retry."); }
+          else if (current()) { this.running = false; this.status("not-found", "The discovered comma is no longer available. Tap Scan network to retry."); }
         }, 5000);
       }});
       if (!current()) return;
@@ -76,7 +76,7 @@ export class StartupConnection {
         if (generation !== this.generation) return;
         this.status(state === "denied" || state === "prompt" ? "permission" : "not-found",
           state === "denied" ? "Local-network access is blocked. Allow it in this site's browser settings."
-            : "No comma found. Tap Scan & connect to request access or retry; enter an IP if your browser hides network addresses.");
+            : "No comma found. Tap Scan network to retry, or + to enter an IP address.");
       }
     } catch (error) {
       if (generation !== this.generation) return;
