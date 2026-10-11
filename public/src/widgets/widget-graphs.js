@@ -27,5 +27,5 @@ export function torqueGraph(value, status) {
   };
   const half = Math.PI / 45;
   const fill = active ? `rgb(255,${Math.round(255 - hot * 140)},${Math.round(255 - hot * 255)})` : "#aaa";
-  return `<svg class="torque-arc" viewBox="0 0 192 54" preserveAspectRatio="none" role="img" aria-label="Steering effort ${Math.round(v * 100)} percent"><path d="${arc(-half, half)}" stroke="white" opacity="${active ? .25 + clamp((mag - .5) * 2, 0, 1) * .25 : .15}" stroke-width="${thickness}"/>${mag > .001 ? `<path d="${arc(0, half * v)}" stroke="${fill}" stroke-width="${thickness}"/>` : ""}${mag < .5 ? `<circle cx="96" cy="${cy - radius}" r="5" fill="#b6b6b6"/>` : ""}</svg>`;
+  return `<svg class="torque-arc" viewBox="0 0 192 54" preserveAspectRatio="none" role="img" aria-label="Steering effort ${(v * 100).toFixed(1)} percent"><path d="${arc(-half, half)}" stroke="white" opacity="${active ? .25 + clamp((mag - .5) * 2, 0, 1) * .25 : .15}" stroke-width="${thickness}"/>${mag > .000001 ? `<path d="${arc(0, half * v)}" stroke="${fill}" stroke-width="${thickness}"/>` : ""}${mag < .5 ? `<circle cx="96" cy="${cy - radius}" r="5" fill="#b6b6b6"/>` : ""}</svg>`;
 }

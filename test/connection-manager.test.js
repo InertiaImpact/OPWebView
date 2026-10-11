@@ -36,3 +36,11 @@ test("a stream that drops after becoming healthy still schedules recovery", asyn
   assert.notEqual(manager.retryTimer, null);
   await manager.disconnect();
 });
+
+test("only successfully connected devices enter the saved reconnect history", async () => {
+  const h = harness(async()=>{throw new Error("failed");});
+  let remembered=0; h.manager.discovery.remember=(device)=>{remembered++;return device;};
+  await assert.rejects(h.manager.connect("192.168.1.10")); assert.equal(remembered,0);
+  h.transport.connect=async()=>{};
+  await h.manager.connect("192.168.1.10"); assert.equal(remembered,1);
+});

@@ -8,10 +8,12 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
+        opacity: 1;
+        transition: opacity 600ms ease;
         position: fixed;
         inset: 50% auto auto 50%;
         transform: translate(-50%, -50%);
@@ -27,11 +29,20 @@
         color: rgba(255, 255, 255, .8);
         text-shadow: 0 1px 3px #000;
       }
+      .dev-watermark.dev-watermark-faded { opacity: 0; }
+      @media (prefers-reduced-motion: reduce) {
+        .dev-watermark { transition: none; }
+      }
     </style>
   </head>
   <body>
     <main id="app" class="app" data-status="disconnected">
       <div class="dev-watermark" aria-label="Development version">DEV</div>
+      <aside id="startup-status" class="startup-status" hidden aria-label="Automatic device connection">
+        <span id="startup-message" role="status" aria-live="polite"></span>
+        <button id="startup-scan" type="button" hidden>Scan &amp; connect</button>
+        <button id="startup-cancel" type="button" hidden>Cancel</button>
+      </aside>
       <section class="viewport" aria-label="openpilot road view">
         <div class="video-backdrop" aria-hidden="true"></div>
         <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
@@ -193,6 +204,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=12"></script>
+    <script type="module" src="./src/app.js?v=13"></script>
   </body>
 </html>

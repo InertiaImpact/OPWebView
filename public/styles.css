@@ -764,7 +764,7 @@ html, body { min-width: 0; }
 .torque-meter .widget-surface { padding: 0; border: 0; background: transparent; border-radius: 0; overflow: visible; }
 .torque-arc { width: 100%; height: 100%; overflow: visible; }
 .torque-arc path { fill: none; stroke-linecap: round; }
-.health-grid .widget-surface { gap: calc(2 * var(--widget-unit)); padding: 0; }
+.health-grid .widget-surface { gap: calc(2 * var(--widget-unit)); padding: 0; border-radius: 0; }
 .health-grid .data-row { padding: 0 calc(3 * var(--widget-unit)); border-radius: calc(4 * var(--widget-unit)); }
 .health-grid .data-row span { font-size: calc(4.6 * var(--widget-unit)); }
 .health-grid .data-row strong { font-size: calc(5.6 * var(--widget-unit)); }
@@ -841,3 +841,7 @@ html, body { min-width: 0; }
 .app .alert-banner[data-fullscreen="true"] { inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 5%; border-radius: 0; }
 .app .alert-banner[data-fullscreen="true"] strong { font-size: clamp(24px, 5vmin, 60px); }
 .app .alert-banner[data-fullscreen="true"] span { font-size: clamp(16px, 3vmin, 36px); }
+.startup-status { position: fixed; z-index: 45; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); max-width: min(92vw, 720px); display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #ffffff30; border-radius: 10px; background: #06131df2; color: #e7f4eb; font: 14px/1.4 Arial, sans-serif; }
+.startup-status[hidden], .startup-status button[hidden] { display: none; }
+.startup-status button { flex-shrink: 0; border: 1px solid #ffffff50; border-radius: 6px; padding: 8px; color: #e7f4eb; background: #163326; cursor: pointer; }
+.viewport { touch-action: manipulation; }

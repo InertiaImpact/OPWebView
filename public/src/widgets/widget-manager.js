@@ -2,6 +2,7 @@ import { WIDGETS } from "./widget-catalog.js";
 import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, presetGeometry, sanitizeLayoutName } from "./layout-presets.js";
 
 import { storageKey } from "../core/app-channel.js";
+import { IndicatorSmoother } from "./indicator-smoothing.js";
 const STORAGE_KEY = storageKey("opwebview.layout.v2");
 const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
 const LEGACY_KEY = storageKey("opwebview.layout.v1");
@@ -24,9 +25,13 @@ export class WidgetManager extends EventTarget {
     this.collapsed = new Set();
     this.lastRender = 0;
     this.elements = new Map();
+    this.indicators = new IndicatorSmoother();
     this.build();
     this.render();
-    store.addEventListener("change", () => this.scheduleRender());
+    store.addEventListener("change", () => {
+      this.scheduleRender();
+      this.scheduleIndicatorAnimation();
+    });
     this.resizeObserver = new ResizeObserver(() => this.refreshGeometry());
     this.resizeObserver.observe(layer);
     this.refreshGeometry();
@@ -96,13 +101,15 @@ export class WidgetManager extends EventTarget {
     if (this.geometryMetric !== undefined && this.geometryMetric !== this.store.state.isMetric) { this.refreshGeometry(); return; }
     this.lastRender = performance.now();
     this.layer.dataset.units = this.store.state.isMetric ? "metric" : "imperial";
+    const display = this.indicators?.sample(this.store.state, performance.now());
     for (const definition of WIDGETS) {
       this.applyLayout(definition.id);
       const element = this.elements.get(definition.id);
       if (element?.hidden) continue;
       const surface = element?.querySelector(".widget-surface");
       if (!surface) continue;
-      const html = definition.render(this.store.state);
+      const html = definition.render(display && ["torque", "confidence"].includes(definition.id)
+        ? { ...this.store.state, ...display } : this.store.state);
       if (surface.__renderedHtml !== html) {
         surface.innerHTML = html;
         surface.__renderedHtml = html;
@@ -116,6 +123,38 @@ export class WidgetManager extends EventTarget {
         button.querySelector("span").textContent = collapsed ? " ▸" : " ▾";
       }
     }
+    if (display?.pending) this.scheduleIndicatorAnimation();
+  }
+
+  scheduleIndicatorAnimation() {
+    if (!this.indicators || this.suspended || this.displayMode === "camera" || this.indicatorFrame) return;
+    if (!["torque", "confidence"].some((id) => {
+      const element = this.elements.get(id);
+      return element && !element.hidden;
+    })) return;
+    this.indicatorFrame = requestAnimationFrame((now) => {
+      this.indicatorFrame = null;
+      if (this.suspended || this.displayMode === "camera") return;
+      // Only these two small SVGs animate at 30 fps; graphs/readouts keep their
+      // lower paint rate. Do not redraw the camera or projection overlay here.
+      if (now - (this.lastIndicatorPaint ?? -Infinity) < 32) {
+        this.scheduleIndicatorAnimation();
+        return;
+      }
+      this.lastIndicatorPaint = now;
+      const display = this.indicators.sample(this.store.state, now);
+      for (const id of ["torque", "confidence"]) {
+        const element = this.elements.get(id);
+        if (!element || element.hidden) continue;
+        const surface = element.querySelector(".widget-surface");
+        const html = WIDGETS.find((widget) => widget.id === id).render({ ...this.store.state, ...display });
+        if (surface && surface.__renderedHtml !== html) {
+          surface.innerHTML = html;
+          surface.__renderedHtml = html;
+        }
+      }
+      if (display.pending) this.scheduleIndicatorAnimation();
+    });
   }
 
   scheduleRender() {
@@ -125,10 +164,14 @@ export class WidgetManager extends EventTarget {
   }
 
   setDisplayMode(mode, suspended = false) {
+    if (this.indicatorFrame) cancelAnimationFrame(this.indicatorFrame);
+    this.indicatorFrame = null;
+    this.indicators?.pause();
     this.displayMode = mode;
     this.suspended = suspended;
     this.refreshGeometry();
     this.render();
+    this.scheduleIndicatorAnimation();
   }
 
   refreshGeometry() {

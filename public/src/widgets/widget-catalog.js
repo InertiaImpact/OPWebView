@@ -115,7 +115,7 @@ export const WIDGETS = Object.freeze([
   {
     id: "torque", title: "Steering torque", className: "torque-meter",
     render(state) {
-      const value = torqueBarValue(state);
+      const value = state.torqueDisplayValue ?? torqueBarValue(state);
       return torqueGraph(value, state.status);
     }
   },

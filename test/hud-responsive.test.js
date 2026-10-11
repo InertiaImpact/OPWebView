@@ -1,11 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { presetGeometry, createPresetLayout } from "../public/src/widgets/layout-presets.js";
 import { torqueGraph, traceGraph } from "../public/src/widgets/widget-graphs.js";
 import { createInitialState, TelemetryStore, applyTelemetry, leadWarningColor } from "../public/src/core/state.js";
 import { ViewportController, presentationMode } from "../public/src/core/viewport-controller.js";
 import { calculateFrameTransform, cameraFor, calibrationMatrix, matvec3, projectPoint } from "../public/src/render/projection.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
+
+test("device health group has square outer corners but keeps rounded individual cells", async () => {
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  const groupRules = [...css.matchAll(/\.health-grid \.widget-surface\s*\{([^}]+)\}/g)];
+  const cellRules = [...css.matchAll(/\.health-grid \.data-row\s*\{([^}]+)\}/g)];
+  assert.match(groupRules.at(-1)[1], /border-radius:\s*0\s*;/);
+  assert.match(cellRules.at(-1)[1], /border-radius:\s*calc\(4 \* var\(--widget-unit\)\)/);
+});
 
 test("presets use OPView corner anchors and source proportions across landscape aspect ratios", () => {
   for (const [w,h] of [[844,390],[1280,480],[1024,768],[1920,1080]]) {

@@ -62,7 +62,7 @@ export class DeviceDiscovery extends EventTarget {
     this.dispatchEvent(new CustomEvent("devices", { detail: next }));
   }
 
-  async scan() {
+  async scan({ signal, onReachable = () => {}, initialTimeoutMs = 2400 } = {}) {
     const candidates = new Map();
     for (const device of this.saved()) candidates.set(device.authority, device);
     for (const host of DEFAULT_CANDIDATES) {
@@ -72,19 +72,22 @@ export class DeviceDiscovery extends EventTarget {
 
     this.dispatchEvent(new CustomEvent("scanstart"));
     this.dispatchEvent(new CustomEvent("scanprogress", { detail: "Checking saved addresses…" }));
-    const results = await Promise.all([...candidates.values()].map(async (device) => ({
-      ...device,
-      reachable: await this.probe(device)
-    })));
+    const results = await Promise.all([...candidates.values()].map(async (device) => {
+      const result = { ...device, reachable: await this.probe(device, initialTimeoutMs, signal) };
+      if (result.reachable && !signal?.aborted) onReachable(result);
+      return result;
+    }));
 
-    if (!results.some((device) => device.reachable)) {
+    if (!signal?.aborted && !results.some((device) => device.reachable)) {
       const prefixes = new Set(this.saved().map((device) => privateSubnetPrefix(device.host)).filter(Boolean));
       for (const prefix of await discoverLocalSubnetPrefixes()) prefixes.add(prefix);
       for (const prefix of [...prefixes].slice(0, 3)) {
+        if (signal?.aborted) break;
         this.dispatchEvent(new CustomEvent("scanprogress", { detail: `Scanning ${prefix}.x…` }));
-        const found = await this.scanSubnet(prefix, candidates);
+        const found = await this.scanSubnet(prefix, candidates, signal);
         if (found) {
           results.push({ ...found, reachable: true });
+          onReachable({ ...found, reachable: true });
           break;
         }
       }
@@ -95,23 +98,28 @@ export class DeviceDiscovery extends EventTarget {
     return results;
   }
 
-  async probe(device, timeoutMs = 2400) {
+  async probe(device, timeoutMs = 2400, signal) {
+    if (signal?.aborted) return false;
     try {
       const options = {
         method: "GET",
-        mode: "no-cors",
+        mode: "cors",
         cache: "no-store",
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs)
       };
       options.targetAddressSpace = "local";
-      await fetch(`${deviceBaseUrl(device)}/schema?services=deviceState`, options);
-      return true;
+      const response = await fetch(`${deviceBaseUrl(device)}/schema?services=deviceState`, options);
+      // Only auto-connect to a positively identified comma service, never a
+      // random HTTP server or opaque no-CORS response discovered on port 5001.
+      if (!response.ok) return false;
+      const schema = await response.json();
+      return Boolean(schema?.deviceState && typeof schema.deviceState === "object");
     } catch {
       return false;
     }
   }
 
-  async scanSubnet(prefix, existing) {
+  async scanSubnet(prefix, existing, signal) {
     const queue = subnetHosts(prefix)
       .map((host) => normalizeHost(host))
       .filter((device) => !existing.has(device.authority));
@@ -119,9 +127,9 @@ export class DeviceDiscovery extends EventTarget {
     let found = null;
 
     const worker = async () => {
-      while (!found && cursor < queue.length) {
+      while (!found && !signal?.aborted && cursor < queue.length) {
         const device = queue[cursor++];
-        if (await this.probe(device, 1300)) {
+        if (await this.probe(device, 1300, signal) && !found && !signal?.aborted) {
           found = { ...device, displayName: `comma (${device.host})` };
         }
       }

@@ -8,6 +8,9 @@ import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3
 import { DemoFeed } from "./demo.js?v=3";
 import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=3";
 import { ViewportController } from "./core/viewport-controller.js";
+import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js";
+import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
+import { DevWatermark } from "./core/dev-watermark.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -59,6 +62,10 @@ const elements = {
   clearDiagnostics: $("#clear-diagnostics-button"),
   checkUpdate: $("#check-update-button"),
   networkPermission: $("#network-permission-status"),
+  startupStatus: $("#startup-status"),
+  startupMessage: $("#startup-message"),
+  startupScan: $("#startup-scan"),
+  startupCancel: $("#startup-cancel"),
   alert: $("#alert-banner"),
   alertTitle: $("#alert-title"),
   alertDetail: $("#alert-detail"),
@@ -78,6 +85,7 @@ const widgets = new WidgetManager({
 });
 const demo = new DemoFeed(adapter);
 const diagnostics = new DiagnosticLog();
+const devWatermark = new DevWatermark($(".dev-watermark"));
 const viewport = new ViewportController({ app: elements.app, video: elements.video, renderer, widgets,
   onChange: (detail) => diagnostics.add("info", "viewport", `Presentation changed to ${detail.mode}`, detail) });
 
@@ -87,6 +95,18 @@ let toastTimer = null;
 let updateRegistration = null;
 let networkPermission = null;
 let updateReloadPending = false;
+const startup = new StartupConnection({ discovery,
+  permission: refreshNetworkPermission,
+  connect: (device) => connectDevice(device, { automatic: true }),
+  idle: () => !demoActive && !streamBusy() && !document.hidden && !widgets.editing,
+  status: (state, message) => {
+    elements.startupStatus.hidden = state === "idle";
+    elements.startupMessage.textContent = message || "";
+    elements.startupScan.hidden = !["permission", "not-found"].includes(state);
+    elements.startupCancel.hidden = !["scanning", "waiting"].includes(state);
+    if (state !== "idle") diagnostics.add(state === "permission" ? "warn" : "info", "startup", message || state);
+  }
+});
 
 function streamBusy() {
   return connection.connecting || store.state.isConnected || Boolean(connection.retryTimer);
@@ -94,8 +114,12 @@ function streamBusy() {
 
 async function refreshNetworkPermission() {
   try {
-    networkPermission = await navigator.permissions.query({ name: "local-network" });
-    networkPermission.onchange = () => refreshNetworkPermission();
+    networkPermission = await localNetworkPermission();
+    if (!networkPermission) throw new Error("Permission query unsupported");
+    networkPermission.onchange = async () => {
+      const state = await refreshNetworkPermission();
+      if (state === "granted" && !startup.running && !elements.startupStatus.hidden && !demoActive && !streamBusy()) startup.start();
+    };
     const state = networkPermission.state;
     elements.networkPermission.textContent = state === "denied"
       ? "Local-network access is blocked. Open this site's Chrome settings and allow Local network access, then return here. No need to clear site data."
@@ -117,6 +141,7 @@ function setConnectionStatus(status, label) {
 }
 
 function openConnectionDialog() {
+  startup.cancel();
   refreshNetworkPermission();
   renderDevices(discovery.saved());
   elements.connectionError.hidden = true;
@@ -177,7 +202,9 @@ function renderDevices(devices) {
   }
 }
 
-async function connectDevice(input) {
+async function connectDevice(input, { automatic = false } = {}) {
+  if (!automatic) startup.cancel();
+  if (connection.connecting) return;
   stopDemo();
   elements.connectionError.hidden = true;
   elements.connectSubmit.disabled = true;
@@ -191,12 +218,15 @@ async function connectDevice(input) {
     elements.connectionDialog.close();
     setConnectionStatus("connected", input.label || input.host || "Connected");
     showToast("Camera and telemetry are live.");
+    return true;
   } catch (error) {
     diagnostics.add("error", "connection", error.message || "Connection failed", error);
     setConnectionStatus("offline", connection.retryCount > 0 ? "Retrying" : "Connection failed");
     elements.connectionError.dataset.kind = "error";
     elements.connectionError.textContent = error.message || "Connection failed.";
     elements.connectionError.hidden = false;
+    if (automatic && !elements.connectionDialog.open) elements.connectionDialog.showModal();
+    return false;
   } finally {
     elements.connectSubmit.disabled = false;
     applyReadyUpdate();
@@ -204,6 +234,7 @@ async function connectDevice(input) {
 }
 
 function startDemo() {
+  startup.cancel();
   connection.disconnect().catch(() => {});
   demoActive = true;
   elements.app.classList.add("demo-active");
@@ -236,6 +267,8 @@ function showToast(message, timeout = 3200) {
 
 function updateUi() {
   const state = store.state;
+  devWatermark.update({ connected: state.isConnected, onRoad: state.started,
+    demo: demoActive, hasStream: Boolean(elements.video.srcObject), ready: elements.video.readyState >= 2 });
   elements.app.dataset.driveState = state.status;
   const hasAlert = state.alertSize > 0 && (state.alertText1 || state.alertText2);
   elements.alert.hidden = !hasAlert;
@@ -313,6 +346,7 @@ function toggleEditing(force) {
     return;
   }
   const editing = typeof force === "boolean" ? force : !widgets.editing;
+  if (editing) startup.cancel();
   widgets.setEditing(editing);
   elements.edit.setAttribute("aria-pressed", String(editing));
   elements.editIcon.textContent = editing ? "🔓" : "🔒";
@@ -331,6 +365,7 @@ elements.connectionForm.addEventListener("submit", (event) => {
 elements.connect.addEventListener("click", openConnectionDialog);
 elements.emptyConnect.addEventListener("click", openConnectionDialog);
 elements.discover.addEventListener("click", async () => {
+  startup.cancel();
   elements.discover.disabled = true;
   elements.discover.textContent = "Scanning…";
   try {
@@ -344,6 +379,12 @@ elements.discover.addEventListener("click", async () => {
     elements.discover.textContent = "Scan network";
   }
 });
+elements.startupScan.addEventListener("click", () => startup.start());
+elements.startupCancel.addEventListener("click", () => {
+  startup.cancel();
+  showToast("Automatic connection cancelled. Use Connect when ready.");
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) startup.cancel(); });
 discovery.addEventListener("scanstart", () => diagnostics.add("info", "discovery", "Network scan started"));
 discovery.addEventListener("scanprogress", (event) => {
   elements.discover.textContent = event.detail;
@@ -406,10 +447,24 @@ elements.controlsToggle.addEventListener("click", () => {
   const open = elements.app.classList.toggle("controls-open");
   elements.controlsToggle.setAttribute("aria-expanded", String(open));
 });
+async function enterFullscreen() {
+  if (document.fullscreenElement) return;
+  try {
+    await document.documentElement.requestFullscreen();
+    elements.app.classList.remove("controls-open");
+    elements.controlsToggle.setAttribute("aria-expanded", "false");
+    viewport.refresh();
+  } catch { showToast("Fullscreen is not available in this browser."); }
+}
+installFullscreenGesture({ target: elements.app,
+  enabled: () => store.state.isConnected && store.state.started && !demoActive && !widgets.editing
+    && !document.fullscreenElement && Boolean(elements.video.srcObject) && elements.video.readyState >= 2,
+  enter: enterFullscreen
+});
 elements.fullscreen.addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
+    else await enterFullscreen();
     elements.app.classList.remove("controls-open");
     elements.controlsToggle.setAttribute("aria-expanded", "false");
     viewport.refresh();
@@ -421,9 +476,13 @@ document.addEventListener("fullscreenchange", () => {
 });
 elements.video.addEventListener("playing", () => {
   elements.app.classList.add("video-ready");
+  updateUi();
   diagnostics.add("info", "video", "First playable camera frame received");
 });
-elements.video.addEventListener("emptied", () => elements.app.classList.remove("video-ready"));
+elements.video.addEventListener("emptied", () => {
+  elements.app.classList.remove("video-ready");
+  updateUi();
+});
 store.addEventListener("change", updateUi);
 connection.addEventListener("state", (event) => {
   diagnostics.add(event.detail === "failed" ? "error" : "info", "webrtc", `State changed to ${event.detail}`);
@@ -545,6 +604,7 @@ if ("serviceWorker" in navigator) {
 renderDevices(discovery.saved());
 diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 refreshNetworkPermission();
+window.addEventListener("load", () => startup.start(), { once: true });
 elements.layoutLabel.textContent = widgets.activeLabel();
 updateUi();
 
