@@ -1,9 +1,10 @@
 import { WIDGETS } from "./widget-catalog.js";
 import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, presetGeometry, sanitizeLayoutName } from "./layout-presets.js";
 
-const STORAGE_KEY = "opwebview.layout.v2";
-const NAMED_KEY = "opwebview.layouts.named.v1";
-const LEGACY_KEY = "opwebview.layout.v1";
+import { storageKey } from "../core/app-channel.js";
+const STORAGE_KEY = storageKey("opwebview.layout.v2");
+const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
+const LEGACY_KEY = storageKey("opwebview.layout.v1");
 
 export { WIDGETS, BUILT_IN_LAYOUTS, createPresetLayout, sanitizeLayoutName };
 

@@ -6,11 +6,13 @@ import { readFile } from "node:fs/promises";
 const source = await readFile(new URL("../public/service-worker.js", import.meta.url), "utf8");
 const base = "https://example.test/OPWebView/";
 
-function worker({ failInstall = false } = {}) {
+function worker({ failInstall = false, root = base, cacheKeys = [] } = {}) {
   const handlers = {};
   const entries = new Map();
   let networkCalls = 0;
   let skipped = false;
+  const deleted = [];
+  const opened = [];
   const cache = {
     async addAll(requests) {
       assert.ok(requests.every((request) => request.cache === "reload"));
@@ -18,26 +20,32 @@ function worker({ failInstall = false } = {}) {
       for (const request of requests) entries.set(request.url, new Response(`release:${request.url}`));
     },
     async match(request) {
-      const url = typeof request === "string" ? new URL(request, base).href : request.url;
+      const url = typeof request === "string" ? new URL(request, root).href : request.url;
       return entries.get(url)?.clone();
     }
   };
   const context = {
     self: {
-      location: new URL(base),
+      location: new URL(root),
       clients: { claim: async () => {} },
       skipWaiting: async () => { skipped = true; },
       addEventListener: (name, callback) => { handlers[name] = callback; }
     },
-    caches: { open: async () => cache, keys: async () => [], delete: async () => true },
+    caches: { open: async (name) => { opened.push(name); return cache; }, keys: async () => cacheKeys, delete: async (name) => { deleted.push(name); return true; } },
     Request: class extends Request {
-      constructor(url, options) { super(new URL(url, base), options); }
+      constructor(url, options) { super(new URL(url, root), options); }
     },
     URL, Response,
     fetch: async () => { networkCalls++; throw new Error("Offline"); }
   };
   vm.runInNewContext(source, context);
   return {
+    deleted, opened,
+    async activate() {
+      let promise;
+      handlers.activate({ waitUntil(value) { promise = value; } });
+      await promise;
+    },
     async install() {
       let promise;
       handlers.install({ waitUntil(value) { promise = value; } });
@@ -45,7 +53,7 @@ function worker({ failInstall = false } = {}) {
     },
     async request(path, mode = "cors") {
       let promise;
-      handlers.fetch({ request: { url: new URL(path, base).href, method: "GET", mode }, respondWith(value) { promise = value; } });
+      handlers.fetch({ request: { url: new URL(path, root).href, method: "GET", mode }, respondWith(value) { promise = value; } });
       return promise;
     },
     get networkCalls() { return networkCalls; },
@@ -57,11 +65,26 @@ test("offline navigation with a new query and scripts use the same installed rel
   const runtime = worker();
   await runtime.install();
   const page = await runtime.request("?v=another-release", "navigate");
-  const script = await runtime.request("src/app.js?v=11");
+  const script = await runtime.request("src/app.js?v=12");
   assert.match(await page.text(), /index\.html/);
-  assert.match(await script.text(), /app\.js\?v=11/);
+  assert.match(await script.text(), /app\.js\?v=12/);
   assert.equal(runtime.networkCalls, 0);
   assert.equal(runtime.skipped, false);
+});
+
+test("stable worker leaves development navigation to the network or dev worker", async () => {
+  const runtime = worker();
+  await runtime.install();
+  assert.equal(await runtime.request("dev/", "navigate"), undefined);
+});
+
+test("dev offline shell and cache cleanup never touch stable caches", async () => {
+  const runtime = worker({ root: `${base}dev/`, cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v20", "opwebview-dev-shell-v1", "opwebview-dev-shell-v20"] });
+  await runtime.install();
+  await runtime.activate();
+  assert.deepEqual(runtime.deleted, ["opwebview-dev-shell-v1"]);
+  assert.ok(runtime.opened.every((name) => name === "opwebview-dev-shell-v21"));
+  assert.match(await (await runtime.request("", "navigate")).text(), /\/dev\/index\.html/);
 });
 
 test("a failed update install cannot force activation", async () => {

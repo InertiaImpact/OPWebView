@@ -1,4 +1,5 @@
-const STORAGE_KEY = "opwebview.devices.v1";
+import { storageKey } from "./app-channel.js";
+const STORAGE_KEY = storageKey("opwebview.devices.v1");
 const DEFAULT_CANDIDATES = ["comma.local"];
 const SUBNET_SCAN_CONCURRENCY = 28;
 

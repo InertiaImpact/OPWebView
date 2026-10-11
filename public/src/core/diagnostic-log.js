@@ -1,8 +1,9 @@
-const STORAGE_KEY = "opwebview.diagnostics.v1";
+import { APP_CHANNEL, storageKey } from "./app-channel.js";
+const STORAGE_KEY = storageKey("opwebview.diagnostics.v1");
 const MAX_ENTRIES = 100;
 const MAX_FIELD_LENGTH = 500;
 
-export const APP_BUILD = "2026.10.10-hud-responsive.1";
+export const APP_BUILD = `2026.10.10-dual-sites.1-${APP_CHANNEL}`;
 
 export class DiagnosticLog extends EventTarget {
   constructor(storage = globalThis.localStorage) {

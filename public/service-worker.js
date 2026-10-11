@@ -1,12 +1,16 @@
-const CACHE_NAME = "opwebview-shell-v20";
+const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
+const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
+const CACHE_VERSION = 21;
+const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=5",
+  "./styles.css?v=6",
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",
-  "./src/app.js?v=11",
+  "./src/app.js?v=12",
+  "./src/core/app-channel.js",
   "./src/demo.js?v=3",
   "./src/core/state.js?v=3",
   "./src/core/telemetry-adapter.js?v=3",
@@ -42,8 +46,8 @@ self.addEventListener("activate", (event) => {
       // Keep the preceding release available for existing tabs during handoff.
       // Only prune this app's caches; never clear site data or other caches.
       .then((keys) => Promise.all(keys.filter((key) => {
-        const version = key.match(/^opwebview-shell-v(\d+)$/);
-        return version && Number(version[1]) < Number(CACHE_NAME.split("-v")[1]) - 1;
+        const version = key.startsWith(CACHE_PREFIX) ? key.slice(CACHE_PREFIX.length) : "";
+        return /^\d+$/.test(version) && Number(version) < CACHE_VERSION - 1;
       }).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
@@ -52,6 +56,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
+  // The root worker must not substitute the stable shell for a first dev visit.
+  const scope = new URL("./", self.location.href).pathname;
+  if (!url.pathname.startsWith(scope) || (!IS_DEV && url.pathname.startsWith(`${scope}dev/`))) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     // All navigation URLs, including ?v= links, boot the same complete release.
