@@ -101,6 +101,7 @@ const startup = new StartupConnection({ discovery,
     elements.startupStatus.hidden = state === "idle";
     elements.startupMessage.textContent = message || "";
     elements.startupCancel.hidden = !["scanning", "waiting"].includes(state);
+    elements.discover.disabled = ["scanning", "waiting", "connecting"].includes(state);
     if (state !== "idle") diagnostics.add(state === "permission" ? "warn" : "info", "startup", message || state);
   }
 });
@@ -139,7 +140,7 @@ function setConnectionStatus(status, label) {
 
 function syncDevicePanel() {
   elements.devicePanel.hidden = widgets.editing || !devicePanelOpen;
-  elements.controlsToggle.hidden = widgets.editing;
+  elements.controlsToggle.hidden = widgets.editing || (!devicePanelOpen && elements.app.dataset.status === "connected");
   elements.controlsToggle.setAttribute("aria-expanded", String(!elements.devicePanel.hidden));
 }
 
@@ -186,7 +187,7 @@ function renderDevices(devices) {
   if (!devices.length) {
     const empty = document.createElement("p");
     empty.className = "device-empty";
-    empty.textContent = "Looking for your comma… Use + to enter an IP address.";
+    empty.textContent = "No devices found yet.";
     elements.deviceList.append(empty);
     return;
   }
@@ -202,6 +203,7 @@ function renderDevices(devices) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Connect";
+    button.hidden = device.reachable !== true;
     button.disabled = connection.connecting;
     button.addEventListener("click", () => connectDevice(device));
     card.append(summary, button);
@@ -366,6 +368,21 @@ function toggleEditing(force) {
   if (editing) renderLayoutDialog();
   syncDevicePanel();
 }
+
+for (const panel of [elements.editTray, elements.widgetPanel]) {
+  const button = panel.querySelector(".panel-collapse");
+  button.addEventListener("click", () => {
+    const collapsed = panel.classList.toggle("panel-collapsed");
+    button.textContent = collapsed ? "+" : "−";
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${panel === elements.editTray ? "views" : "widgets"}`);
+  });
+}
+$("#editing-devices-button").addEventListener("click", () => {
+  toggleEditing(false);
+  devicePanelOpen = true;
+  syncDevicePanel();
+});
 
 elements.connectionForm.addEventListener("submit", (event) => {
   event.preventDefault();

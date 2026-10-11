@@ -715,15 +715,16 @@ html, body { min-width: 0; }
   border: 1px solid #ffffff24; border-radius: 14px; background: #08141eed;
   box-shadow: 0 10px 35px #0005; font-size: 13px; pointer-events: auto;
 }
-.device-panel { left: max(52px, calc(env(safe-area-inset-left) + 44px)); }
+.device-panel { left: max(52px, calc(env(safe-area-inset-left) + 44px)); width: clamp(280px, 32vw, 380px); max-width: calc(100vw - 72px); }
 .view-panel { left: max(12px, env(safe-area-inset-left)); }
 .widget-panel { right: max(12px, env(safe-area-inset-right)); }
 .app { --editor-dock-width: min(260px, 26vw); }
 .view-panel, .widget-panel { width: var(--editor-dock-width); }
-.app.layout-editing .widget-layer {
-  left: calc(var(--editor-dock-width) + max(24px, env(safe-area-inset-left)));
-  right: calc(var(--editor-dock-width) + max(24px, env(safe-area-inset-right)));
-}
+.floating-panel.panel-collapsed { width: auto; overflow: visible; }
+.floating-panel.panel-collapsed > :not(.dock-header):not(#done-editing-button) { display: none; }
+.floating-panel.panel-collapsed .dock-header { margin-bottom: 0; }
+.floating-panel.panel-collapsed #layout-label { display: none; }
+.panel-collapse { margin-left: auto; }
 .device-panel-toggle { position: absolute; z-index: 36; left: max(8px, env(safe-area-inset-left)); top: 46%; width: 36px; height: 48px; border: 1px solid #ffffff30; border-radius: 9px; background: #08141ec9; color: var(--accent); font-size: 24px; cursor: pointer; }
 .dock-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; font-size: 14px; font-weight: 750; }
 .dock-header #layout-label { color: var(--muted); font-size: 12px; }
@@ -731,12 +732,15 @@ html, body { min-width: 0; }
 .text-button, .close-button { border: 0; cursor: pointer; }
 .floating-panel button:hover, .floating-panel button:focus-visible { border-color: var(--accent); }
 .floating-panel button:disabled { opacity: .5; cursor: wait; }
-.dock-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.dock-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.device-tools { margin-top: 12px; color: var(--muted); }
+.device-tools summary { cursor: pointer; padding: 6px 0; }
+.device-tools .dock-actions { margin-top: 6px; }
 .device-panel .device-list { display: grid; gap: 8px; }
-.device-panel .device-card { align-items: flex-start; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; }
+.device-panel .device-card { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px; min-height: 0; }
 .device-panel .device-card strong { font-size: 14px; overflow-wrap: anywhere; }
 .device-panel .device-card span { font-size: 11px; overflow-wrap: anywhere; }
-.device-panel .device-card button { width: 100%; color: var(--accent); background: #55eaa312; }
+.device-panel .device-card button { color: var(--accent); background: #55eaa312; }
 .device-panel .connection-pill { display: inline-flex; min-height: 22px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; padding: 2px 7px; font-size: 10px; }
 .device-panel #startup-status { color: var(--muted); font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
 .device-panel #startup-status button { margin-top: 7px; }

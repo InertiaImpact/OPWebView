@@ -6,6 +6,20 @@ import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
 import { createPresetLayout } from "../public/src/widgets/layout-presets.js";
 
+test("editing menus overlay unchanged widget bounds and can collapse independently", async () => {
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  const page = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\.app\.layout-editing \.widget-layer\s*\{[^}]*(?:left|right|width):/);
+  assert.match(css, /\.floating-panel\.panel-collapsed > :not\(\.dock-header\):not\(#done-editing-button\)/);
+  assert.equal([...page.matchAll(/class="panel-collapse"/g)].length, 2);
+  assert.match(app, /panel\.classList\.toggle\("panel-collapsed"\)/);
+  assert.match(app, /!devicePanelOpen && elements\.app\.dataset\.status === "connected"/);
+  assert.match(page, /id="editing-devices-button"/);
+  assert.match(page, /<details class="device-tools">/);
+  assert.match(app, /button\.hidden = device\.reachable !== true/);
+});
+
 test("editing docks do not replace a widget's saved geometry on the first drag", () => {
   const layout = createPresetLayout("enhanced");
   const temporary = structuredClone(layout);
