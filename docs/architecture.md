@@ -17,6 +17,7 @@ The app is framework-free. This keeps the GitHub Pages artifact static and the o
 - `render/projection.js` is pure projection math and has no DOM dependency.
 - `render/overlay-renderer.js` paints model geometry on a device-pixel-ratio-aware canvas.
 - `widgets/widget-manager.js` owns widget definitions, visibility, and persisted percentage-based layout.
+- On dev, overlay paints are coalesced and limited to relevant inputs; ordinary widget paints update values/visibility without rewriting geometry. Torque/confidence retain their SVG nodes while animating, using the same presentation math as static rendering.
 - `core/storage.js` validates stored records and supports safe, per-key migration on dev.
 - `service-worker.js` caches only same-origin application code. It never intercepts device traffic.
 

@@ -9,7 +9,7 @@ import {
   steeringMode,
   torqueBarValue
 } from "../core/state.js?v=3";
-import { torqueGraph, traceGraph } from "./widget-graphs.js";
+import { torqueGraph, traceGraph, confidenceGraph } from "./widget-graphs.js";
 
 const dash = "–";
 const noLead = "– –";
@@ -83,12 +83,7 @@ export const WIDGETS = Object.freeze([
   },
   {
     id: "confidence", title: "Model confidence", className: "confidence-disc",
-    render(state) {
-      const live = state.status !== "disengaged" && state.confidenceSeen;
-      const c = Math.max(0, Math.min(1, state.confidenceFiltered));
-      const colors = c > .5 ? ["#00ffcc", "#00ff26"] : c > .2 ? ["#ffc800", "#ff7300"] : ["#ff0015", "#ff0059"];
-      return `<svg viewBox="0 0 100 100" class="driver-symbol ${live ? '' : 'inactive'}" role="img" aria-label="Model confidence ${live ? Math.round(c * 100) + ' percent' : 'unavailable'}"><defs><linearGradient id="confidence-gradient" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient></defs><circle cx="50" cy="50" r="40" fill="none" stroke="#ffffff2e" stroke-width="4.5"/>${live ? `<circle cx="50" cy="50" r="${8 + 26 * c}" fill="url(#confidence-gradient)"/>` : ""}</svg>`;
-    }
+    render: confidenceGraph
   },
   {
     id: "steering", title: "Steering", className: "info-stack",

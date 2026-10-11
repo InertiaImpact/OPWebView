@@ -706,6 +706,7 @@ html, body { min-width: 0; }
 .app .alert-banner[data-fullscreen="true"] strong { font-size: clamp(24px, 5vmin, 60px); }
 .app .alert-banner[data-fullscreen="true"] span { font-size: clamp(16px, 3vmin, 36px); }
 .viewport { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.stream-health { position: absolute; z-index: 18; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); margin: 0; padding: 7px 12px; max-width: 90%; border-radius: 7px; background: #281e08ed; color: #ffd182; font-size: 13px; text-align: center; pointer-events: none; }
 
 /* Viewer chrome is confined to side docks; camera/HUD geometry stays intact. */
 .floating-panel {

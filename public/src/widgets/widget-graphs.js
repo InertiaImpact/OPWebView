@@ -13,7 +13,7 @@ export function traceGraph(history, { label, want, got, color, lo, hi }) {
 }
 
 // Source arc: 1200 reference-pixel radius, +/-4 degrees from bottom centre.
-export function torqueGraph(value, status) {
+export function torquePresentation(value, status) {
   const v = clamp(value, -1, 1), mag = Math.abs(v);
   const hot = clamp((mag - .75) * 4, 0, 1);
   const active = ["engaged", "latOnly"].includes(status);
@@ -27,5 +27,26 @@ export function torqueGraph(value, status) {
   };
   const half = Math.PI / 45;
   const fill = active ? `rgb(255,${Math.round(255 - hot * 140)},${Math.round(255 - hot * 255)})` : "#aaa";
-  return `<svg class="torque-arc" viewBox="0 0 192 54" preserveAspectRatio="none" role="img" aria-label="Steering effort ${(v * 100).toFixed(1)} percent"><path d="${arc(-half, half)}" stroke="white" opacity="${active ? .25 + clamp((mag - .5) * 2, 0, 1) * .25 : .15}" stroke-width="${thickness}"/>${mag > .000001 ? `<path d="${arc(0, half * v)}" stroke="${fill}" stroke-width="${thickness}"/>` : ""}${mag < .5 ? `<circle cx="96" cy="${cy - radius}" r="5" fill="#b6b6b6"/>` : ""}</svg>`;
+  return { background: arc(-half, half), foreground: arc(0, half * v), fill, thickness,
+    opacity: active ? .25 + clamp((mag - .5) * 2, 0, 1) * .25 : .15,
+    dotY: cy - radius, showFill: mag > .000001, showDot: mag < .5,
+    label: `Steering effort ${(v * 100).toFixed(1)} percent` };
+}
+
+export function torqueGraph(value, status) {
+  const p = torquePresentation(value, status);
+  return `<svg class="torque-arc" viewBox="0 0 192 54" preserveAspectRatio="none" role="img" aria-label="${p.label}"><path d="${p.background}" stroke="white" opacity="${p.opacity}" stroke-width="${p.thickness}"/>${p.showFill ? `<path d="${p.foreground}" stroke="${p.fill}" stroke-width="${p.thickness}"/>` : ""}${p.showDot ? `<circle cx="96" cy="${p.dotY}" r="5" fill="#b6b6b6"/>` : ""}</svg>`;
+}
+
+export function confidencePresentation(state) {
+  const live = state.status !== "disengaged" && state.confidenceSeen;
+  const c = Math.max(0, Math.min(1, state.confidenceFiltered));
+  return { live, radius: 8 + 26 * c, className: `driver-symbol ${live ? "" : "inactive"}`,
+    colors: c > .5 ? ["#00ffcc", "#00ff26"] : c > .2 ? ["#ffc800", "#ff7300"] : ["#ff0015", "#ff0059"],
+    label: `Model confidence ${live ? Math.round(c * 100) + " percent" : "unavailable"}` };
+}
+
+export function confidenceGraph(state) {
+  const p = confidencePresentation(state);
+  return `<svg viewBox="0 0 100 100" class="${p.className}" role="img" aria-label="${p.label}"><defs><linearGradient id="confidence-gradient" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${p.colors[0]}"/><stop offset="1" stop-color="${p.colors[1]}"/></linearGradient></defs><circle cx="50" cy="50" r="40" fill="none" stroke="#ffffff2e" stroke-width="4.5"/>${p.live ? `<circle cx="50" cy="50" r="${p.radius}" fill="url(#confidence-gradient)"/>` : ""}</svg>`;
 }

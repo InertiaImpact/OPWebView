@@ -21,6 +21,7 @@ const elements = {
   widgetPanel: $("#widget-panel"),
   video: $("#road-video"),
   canvas: $("#model-overlay"),
+  streamHealth: $("#stream-health"),
   connectionPill: $("#connection-pill"),
   connectionDialog: $("#connection-dialog"),
   connectionForm: $("#connection-form"),
@@ -66,7 +67,8 @@ const elements = {
 };
 
 const store = new TelemetryStore();
-const adapter = new CerealAdapter(store);
+const diagnostics = new DiagnosticLog();
+const adapter = new CerealAdapter(store, { onDiscard: (message) => diagnostics.add("warn", "telemetry", message) });
 const discovery = new DeviceDiscovery();
 const transport = new WebRTCTransport(elements.video);
 const connection = new ConnectionManager({ store, transport, adapter, discovery });
@@ -77,7 +79,6 @@ const widgets = new WidgetManager({
   store
 });
 const demo = new DemoFeed(adapter);
-const diagnostics = new DiagnosticLog();
 const devWatermark = new DevWatermark($(".dev-watermark"));
 const viewport = new ViewportController({ app: elements.app, video: elements.video, renderer, widgets,
   onChange: (detail) => {
@@ -479,6 +480,7 @@ widgets.addEventListener("layoutchange", () => {
   elements.layoutLabel.textContent = widgets.activeLabel();
   if (widgets.editing) renderLayoutDialog();
   viewport.refresh();
+  renderer.schedule();
 });
 
 elements.controlsToggle.addEventListener("click", () => {
@@ -549,6 +551,12 @@ connection.addEventListener("retry", (event) => {
   diagnostics.add("warn", "webrtc", `Connection lost; retry ${event.detail} of 3`);
   showToast(`Connection lost. Retry ${event.detail} of 3…`);
 });
+connection.addEventListener("health", (event) => {
+  const stale = event.detail.staleServices;
+  elements.streamHealth.hidden = !stale.length;
+  elements.streamHealth.textContent = stale.length ? "Telemetry delayed — values may be outdated" : "";
+  if (stale.length) diagnostics.add("warn", "telemetry", "Live telemetry delayed", { services: stale });
+});
 window.addEventListener("error", (event) => diagnostics.add("error", "browser", event.message, {
   file: event.filename?.split("/").at(-1), line: event.lineno, column: event.colno
 }));
@@ -556,6 +564,7 @@ window.addEventListener("unhandledrejection", (event) => diagnostics.add("error"
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && store.state.isConnected) connection.acquireWakeLock();
   if (document.visibilityState === "visible") {
+    transport.resumeTelemetryHealth();
     refreshNetworkPermission();
     checkForUpdates();
   }

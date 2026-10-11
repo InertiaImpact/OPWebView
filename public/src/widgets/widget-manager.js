@@ -3,6 +3,7 @@ import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, presetGeometry, 
 
 import { storageKey } from "../core/app-channel.js";
 import { IndicatorSmoother } from "./indicator-smoothing.js";
+import { paintIndicator } from "./indicator-renderer.js";
 import { browserStorage, readStored, writeStored, removeStored } from "../core/storage.js";
 const STORAGE_KEY = storageKey("opwebview.layout.v2");
 const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
@@ -110,16 +111,19 @@ export class WidgetManager extends EventTarget {
     this.layer.dataset.units = this.store.state.isMetric ? "metric" : "imperial";
     const display = this.indicators?.sample(this.store.state, performance.now());
     for (const definition of WIDGETS) {
-      this.applyLayout(definition.id);
+      this.updateVisibility(definition.id);
       const element = this.elements.get(definition.id);
       if (element?.hidden) continue;
       const surface = element?.querySelector(".widget-surface");
       if (!surface) continue;
-      const html = definition.render(display && ["torque", "confidence"].includes(definition.id)
-        ? { ...this.store.state, ...display } : this.store.state);
-      if (surface.__renderedHtml !== html) {
-        surface.innerHTML = html;
-        surface.__renderedHtml = html;
+      const state = display && ["torque", "confidence"].includes(definition.id)
+        ? { ...this.store.state, ...display } : this.store.state;
+      if (!paintIndicator(surface, definition.id, state)) {
+        const html = definition.render(state);
+        if (surface.__renderedHtml !== html) {
+          surface.innerHTML = html;
+          surface.__renderedHtml = html;
+        }
       }
       const collapsed = this.collapsed.has(definition.id);
       element.classList.toggle("collapsed", collapsed);
@@ -154,11 +158,7 @@ export class WidgetManager extends EventTarget {
         const element = this.elements.get(id);
         if (!element || element.hidden) continue;
         const surface = element.querySelector(".widget-surface");
-        const html = WIDGETS.find((widget) => widget.id === id).render({ ...this.store.state, ...display });
-        if (surface && surface.__renderedHtml !== html) {
-          surface.innerHTML = html;
-          surface.__renderedHtml = html;
-        }
+        if (surface) paintIndicator(surface, id, { ...this.store.state, ...display });
       }
       if (display.pending) this.scheduleIndicatorAnimation();
     });
@@ -177,7 +177,6 @@ export class WidgetManager extends EventTarget {
     this.displayMode = mode;
     this.suspended = suspended;
     this.refreshGeometry();
-    this.render();
     this.scheduleIndicatorAnimation();
   }
 
@@ -212,6 +211,7 @@ export class WidgetManager extends EventTarget {
     this.layer.classList.toggle("editing", this.editing);
     for (const element of this.elements.values()) element.tabIndex = this.editing ? 0 : -1;
     this.dispatchEvent(new CustomEvent("editing", { detail: this.editing }));
+    this.render();
   }
 
   setVisible(id, visible) {
@@ -304,6 +304,20 @@ export class WidgetManager extends EventTarget {
     element.style.setProperty("--y", layout.y);
     element.style.setProperty("--w", layout.w);
     element.style.setProperty("--h", layout.h);
+    this.updateVisibility(id);
+    // Fit custom text against its own widget, instead of the whole screen.
+    const { width, height } = this.bounds || this.layer.getBoundingClientRect();
+    const reference = { detailedSteering: [112,115], detailedDriver: [112,46], detailedLongitudinal: [112,97], detailedLead: [112,73], steering:[100,68], lead:[100,68], deviceHealth:[82,34] }[id];
+    if (reference) {
+      const unit = Math.min(width * layout.w / 100 / reference[0], height * layout.h / 100 / reference[1]);
+      element.style.setProperty("--widget-unit", `${this.collapsed.has(id) ? width * layout.w / 100 / reference[0] : unit}px`);
+    }
+  }
+
+  updateVisibility(id) {
+    const element = this.elements.get(id);
+    const layout = this.displayMode === "full" && this.editing ? this.layout[id] : (this.presentedLayout || this.layout)[id];
+    if (!element || !layout) return;
     const state = this.store.state;
     const autoHide = this.displayMode === "full" && !this.editing && BUILT_IN_LAYOUTS[this.activeLayout];
     element.hidden = this.displayMode === "camera" || Boolean(layout.hidden)
@@ -313,13 +327,6 @@ export class WidgetManager extends EventTarget {
       || (autoHide && id === "speedLimit" && ((state.paramsSeen && state.speedLimitMode === 0) || !state.speedLimitSeen))
       || (autoHide && id === "cruise" && (state.vCruiseCluster || state.vCruiseDeprecated) === -1)
       || (autoHide && id === "turnSignals" && !state.showTurnSignals);
-    // Fit custom text against its own widget, instead of the whole screen.
-    const { width, height } = this.bounds || this.layer.getBoundingClientRect();
-    const reference = { detailedSteering: [112,115], detailedDriver: [112,46], detailedLongitudinal: [112,97], detailedLead: [112,73], steering:[100,68], lead:[100,68], deviceHealth:[82,34] }[id];
-    if (reference) {
-      const unit = Math.min(width * layout.w / 100 / reference[0], height * layout.h / 100 / reference[1]);
-      element.style.setProperty("--widget-unit", `${this.collapsed.has(id) ? width * layout.w / 100 / reference[0] : unit}px`);
-    }
   }
 
   markCustom() {

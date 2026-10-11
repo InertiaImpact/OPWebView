@@ -27,6 +27,8 @@ export const SERVICE_PROFILES = Object.freeze([
   Object.freeze({ calibration: "extrinsicsCalibration", camera: "narrowRoadCameraState" }),
   Object.freeze({ calibration: "liveCalibration", camera: "roadCameraState" })
 ]);
+export const TELEMETRY_STALE_MS = 5000;
+const LIVE_SERVICES = ["carState", "modelV2"];
 
 export class WebRTCTransport extends EventTarget {
   constructor(videoElement) {
@@ -36,6 +38,8 @@ export class WebRTCTransport extends EventTarget {
     this.channel = null;
     this.generation = 0;
     this.readiness = createReadinessState();
+    this.lastTelemetry = new Map();
+    this.staleServices = [];
   }
 
   async connect(device, { camera = "road" } = {}) {
@@ -76,7 +80,9 @@ export class WebRTCTransport extends EventTarget {
         }
       }).catch((error) => this.dispatchProgress(`Camera playback was blocked: ${error.message}`));
     });
-    peer.addEventListener("datachannel", (event) => this.attachChannel(event.channel, generation));
+    peer.addEventListener("datachannel", (event) => {
+      if (generation === this.generation) this.attachChannel(event.channel, generation);
+    });
 
     // Match gerrylum/opview: telemetry is time-sensitive, so stale packets are
     // dropped instead of holding up every later update on an unreliable link.
@@ -97,6 +103,7 @@ export class WebRTCTransport extends EventTarget {
       await waitForPeerConnection(peer, 15000);
       await this.waitForStreams(generation, 20000);
       if (generation === this.generation) {
+        this.startTelemetryHealth();
         this.dispatchState("connected");
         this.dispatchProgress("Camera and telemetry are live.");
       }
@@ -133,7 +140,7 @@ export class WebRTCTransport extends EventTarget {
       if (typeof event.data === "string") text = event.data;
       else if (event.data instanceof Blob) text = await event.data.text();
       else text = new TextDecoder().decode(event.data);
-      this.readiness.dataReceived = true;
+      if (generation !== this.generation) return;
       this.dispatchEvent(new CustomEvent("data", { detail: text }));
     });
     if (channel.readyState === "open") onOpen();
@@ -146,9 +153,43 @@ export class WebRTCTransport extends EventTarget {
     this.dispatchProgress("Camera is live. Waiting for telemetry data…");
   }
 
+  markTelemetryReceived(types, now = performance.now()) {
+    for (const type of types || []) {
+      if (LIVE_SERVICES.includes(type)) this.lastTelemetry.set(type, now);
+    }
+    // A clockSync reply, unknown service or malformed JSON is not telemetry.
+    this.readiness.dataReceived = this.hasFreshTelemetry(now);
+    if (this.staleServices.length) this.checkTelemetryHealth(now);
+  }
+
+  hasFreshTelemetry(now = performance.now()) {
+    return LIVE_SERVICES.every((type) => now - (this.lastTelemetry.get(type) ?? -Infinity) <= TELEMETRY_STALE_MS);
+  }
+
+  startTelemetryHealth() {
+    clearInterval(this.healthTimer);
+    this.resumeTelemetryHealth();
+    this.healthTimer = setInterval(() => this.checkTelemetryHealth(), 1000);
+  }
+
+  resumeTelemetryHealth(now = performance.now()) {
+    // Give normal background/resume delivery a chance to recover. A warning
+    // does not close the peer, alter values or start another reconnect loop.
+    this.healthGraceUntil = now + TELEMETRY_STALE_MS;
+  }
+
+  checkTelemetryHealth(now = performance.now()) {
+    if (globalThis.document?.hidden || now < this.healthGraceUntil) return;
+    const staleServices = LIVE_SERVICES.filter((type) => now - (this.lastTelemetry.get(type) ?? -Infinity) > TELEMETRY_STALE_MS);
+    if (staleServices.join() === this.staleServices.join()) return;
+    this.staleServices = staleServices;
+    this.dispatchEvent(new CustomEvent("health", { detail: { staleServices } }));
+  }
+
   async waitForStreams(generation, timeoutMs) {
     const startedAt = Date.now();
     while (generation === this.generation && Date.now() - startedAt < timeoutMs) {
+      this.readiness.dataReceived = this.hasFreshTelemetry();
       if (this.readiness.videoReady && this.readiness.dataReceived) return;
       await delay(100);
     }
@@ -169,6 +210,14 @@ export class WebRTCTransport extends EventTarget {
     this.channel = null;
     this.peer = null;
     this.readiness = createReadinessState();
+    clearInterval(this.healthTimer);
+    this.healthTimer = null;
+    this.lastTelemetry.clear();
+    this.healthGraceUntil = 0;
+    if (this.staleServices.length) {
+      this.staleServices = [];
+      this.dispatchEvent(new CustomEvent("health", { detail: { staleServices: [] } }));
+    }
     try { channel?.close(); } catch {}
     try { peer?.close(); } catch {}
     if (this.videoElement.srcObject) {
@@ -198,7 +247,7 @@ export function readinessFailureMessage(readiness, videoStats = {}) {
     return "The telemetry channel opened, but the comma sent neither data nor camera frames. Confirm OpviewEnabled is on, put the comma onroad, and restart webrtcd.";
   }
   if (!readiness.dataReceived) {
-    return "The camera is live, but no telemetry arrived. Confirm the rx-wb OPView support is enabled and restart webrtcd.";
+    return "The camera is live, but parsed carState and modelV2 telemetry did not both arrive. Confirm OPView streaming is enabled and check the device's telemetry bridge.";
   }
   if ((videoStats.packetsReceived || 0) > 0 && (videoStats.framesDecoded || 0) === 0) {
     return "Telemetry is live and camera packets arrived, but this browser could not decode the H.264 video stream.";

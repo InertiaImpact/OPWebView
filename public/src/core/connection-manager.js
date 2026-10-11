@@ -20,7 +20,7 @@ export class ConnectionManager extends EventTarget {
     this.wakeLock = null;
 
     transport.addEventListener("data", (event) => {
-      adapter.apply(event.detail);
+      if (adapter.apply(event.detail) > 0) transport.markTelemetryReceived?.(adapter.lastAppliedTypes);
       this.switchCameraIfNeeded();
     });
     transport.addEventListener("state", (event) => {
@@ -34,6 +34,7 @@ export class ConnectionManager extends EventTarget {
     });
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
     transport.addEventListener("progress", (event) => this.dispatchEvent(new CustomEvent("progress", { detail: event.detail })));
+    transport.addEventListener("health", (event) => this.dispatchEvent(new CustomEvent("health", { detail: event.detail })));
   }
 
   async connect(input, { remember = true } = {}) {
