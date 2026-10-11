@@ -48,6 +48,9 @@ test("long press unlocks once, not on short taps, dragging, controls, cancellati
   };
   dispatch("pointerdown"); assert.equal(delay, 700); callback(); assert.equal(calls, 1);
   dispatch("pointerup");
+  assert.equal(dispatch("pointerdown", { pointerType: "touch" }).defaultPrevented, true);
+  dispatch("pointerup");
+  assert.equal(dispatch("pointerdown", { pointerType: "touch" }, true).defaultPrevented, false);
   dispatch("pointerdown"); dispatch("pointerup"); assert.equal(callback, null);
   dispatch("pointerdown"); dispatch("pointermove", { clientX: 50 }); assert.equal(callback, null);
   dispatch("pointerdown"); dispatch("pointercancel"); assert.equal(callback, null);
@@ -57,7 +60,20 @@ test("long press unlocks once, not on short taps, dragging, controls, cancellati
   dispatch("pointerdown"); enabled = false; callback(); assert.equal(calls, 1);
   enabled = true;
   assert.equal(dispatch("contextmenu").defaultPrevented, true); assert.equal(calls, 2);
+  enabled = false;
+  assert.equal(dispatch("contextmenu").defaultPrevented, true);
+  assert.equal(calls, 2, "native menu suppressed without unlocking twice");
+  assert.equal(dispatch("contextmenu", {}, true).defaultPrevented, false, "controls keep native behavior");
   remove(); dispatch("pointerdown"); assert.equal(calls, 2);
+});
+
+test("viewer takes gesture ownership before editing, but leaves video playback and panel controls intact", async () => {
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  assert.match(css, /#road-video\s*\{\s*pointer-events: none/);
+  assert.match(css, /\.viewport \{[^}]*user-select: none[^}]*-webkit-touch-callout: none/);
+  assert.match(app, /if \(document\.fullscreenElement\) await document\.exitFullscreen\(\)/);
+  assert.match(app, /toggle: toggleFullscreen/);
 });
 
 test("found devices are listed before automatic connection can abort discovery", async () => {

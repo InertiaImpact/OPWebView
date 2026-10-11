@@ -89,9 +89,9 @@ test("discovery validates comma schema instead of accepting arbitrary or opaque 
   } finally { globalThis.fetch = original; }
 });
 
-test("double taps enter synchronously only when enabled; drag, controls and long taps are ignored", () => {
+test("double taps toggle synchronously only when enabled; drag, controls and long taps are ignored", () => {
   const target = new EventTarget(); let time = 0, enabled = true, calls = 0;
-  const remove = installFullscreenGesture({target,enabled:()=>enabled,now:()=>time,enter:()=>{calls++;}});
+  const remove = installFullscreenGesture({target,enabled:()=>enabled,now:()=>time,toggle:()=>{calls++;}});
   const dispatch = (type,x,y,blocked=false) => {
     const event = new Event(type,{cancelable:true});
     Object.defineProperty(event,"target",{value:{closest:()=>blocked}});
@@ -99,9 +99,10 @@ test("double taps enter synchronously only when enabled; drag, controls and long
   };
   const tap = (x=10,y=10,blocked=false) => { dispatch("pointerdown",x,y,blocked); time+=50; dispatch("pointerup",x,y,blocked); time+=50; };
   tap(); tap(); assert.equal(calls,1);
-  enabled=false; tap(); tap(); assert.equal(calls,1);
-  enabled=true; tap(10,10,true); tap(10,10,true); assert.equal(calls,1);
-  dispatch("pointerdown",10,10); time+=50; dispatch("pointerup",80,10); tap(); assert.equal(calls,1);
-  time+=400; dispatch("pointerdown",10,10); time+=400; dispatch("pointerup",10,10); tap(); assert.equal(calls,1);
-  remove(); tap(); tap(); assert.equal(calls,1);
+  tap(); tap(); assert.equal(calls,2);
+  enabled=false; tap(); tap(); assert.equal(calls,2);
+  enabled=true; tap(10,10,true); tap(10,10,true); assert.equal(calls,2);
+  dispatch("pointerdown",10,10); time+=50; dispatch("pointerup",80,10); tap(); assert.equal(calls,2);
+  time+=400; dispatch("pointerdown",10,10); time+=400; dispatch("pointerup",10,10); tap(); assert.equal(calls,2);
+  remove(); tap(); tap(); assert.equal(calls,2);
 });

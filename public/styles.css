@@ -93,6 +93,7 @@ button { color: inherit; }
 }
 
 #road-video {
+  pointer-events: none;
   object-fit: cover;
   opacity: 0;
   transition: opacity 220ms ease;
@@ -704,7 +705,7 @@ html, body { min-width: 0; }
 .app .alert-banner[data-fullscreen="true"] { inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 5%; border-radius: 0; }
 .app .alert-banner[data-fullscreen="true"] strong { font-size: clamp(24px, 5vmin, 60px); }
 .app .alert-banner[data-fullscreen="true"] span { font-size: clamp(16px, 3vmin, 36px); }
-.viewport { touch-action: manipulation; }
+.viewport { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
 /* Viewer chrome is confined to side docks; camera/HUD geometry stays intact. */
 .floating-panel {
@@ -758,7 +759,6 @@ html, body { min-width: 0; }
 .widget-panel .widget-toggle label { font-size: 12px; }
 .widget-panel .widget-toggles { gap: 6px; }
 .app.layout-editing .widget-layer { opacity: 1; }
-.app.layout-editing .viewport { -webkit-touch-callout: none; }
 .app[data-presentation="camera"] .floating-panel, .app[data-presentation="camera"] .device-panel-toggle { display: none; }
 @media (max-width: 600px), (max-height: 420px) {
   .floating-panel { padding: 10px; top: max(8px, env(safe-area-inset-top)); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }

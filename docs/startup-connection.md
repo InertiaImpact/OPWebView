@@ -10,6 +10,8 @@ Discovery validates the comma's CORS-readable service schema, not just an open H
 
 Cancel, starting demo, manual connection, editing a layout or hiding the page cancels startup scanning/countdowns. An unsuccessful attempt does not spin in an automatic retry loop. Loading the installed app without internet still attempts local discovery: lack of internet does not imply lack of LAN. No data or permission settings are cleared.
 
-Double-tap a non-interactive area of the viewer to **enter** fullscreen while on-road telemetry and a playing WebRTC video are active. Buttons, links, inputs, dialogs, dragging, layout editing and demo are excluded. The second tap requests fullscreen directly, preserving the browser's user-gesture requirement. The existing fullscreen button still toggles it. Native Android video PiP stays camera-only.
+Double-tap a non-interactive area of the viewer to **toggle** fullscreen while on-road telemetry and a playing WebRTC video are active, or in demo. Double-tap can also exit fullscreen after a stream stops. Buttons, links, inputs, dialogs, side docks, dragging and layout editing are excluded. The second tap toggles fullscreen directly, preserving the browser's user-gesture requirement. The fullscreen button shares the same toggle handler. Native Android video PiP stays camera-only.
+
+The camera video is a non-interactive presentation layer; pointer gestures reach the viewer instead of the browser's native video menu. Selection/callouts are disabled on the viewer before the gesture starts, and its context-menu handler runs in capture phase. Buttons, fields and side panels retain their own touch and scrolling behavior.
 
 Browser permission prompts, actual local device reachability and Android fullscreen require a parked hardware test. Unit tests exercise delay/priority/cancellation/permission fallback and gesture boundaries; browser smoke testing does not connect to or change a comma.

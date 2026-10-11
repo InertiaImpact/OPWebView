@@ -1,4 +1,4 @@
-export function installFullscreenGesture({ target, enabled, enter, now = () => performance.now() }) {
+export function installFullscreenGesture({ target, enabled, toggle, now = () => performance.now() }) {
   let down = null, previous = null;
   const blocked = (event) => event.target.closest?.("button, input, select, textarea, a, dialog, .floating-panel, [contenteditable]");
   const onDown = (event) => {
@@ -13,9 +13,9 @@ export function installFullscreenGesture({ target, enabled, enter, now = () => p
     if (previous && time - previous.at <= 350 && Math.hypot(tap.x - previous.x, tap.y - previous.y) <= 40) {
       previous = null;
       // Call synchronously inside the second user gesture for fullscreen's
-      // activation requirement. This gesture enters fullscreen, never exits it.
+      // activation requirement. The same gesture enters or exits fullscreen.
       if (event.cancelable) event.preventDefault();
-      enter();
+      toggle();
     } else { previous = { x: tap.x, y: tap.y, at: time }; }
   };
   const reset = () => { down = previous = null; };

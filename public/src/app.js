@@ -466,27 +466,23 @@ elements.controlsToggle.addEventListener("click", () => {
   devicePanelOpen = !devicePanelOpen;
   syncDevicePanel();
 });
-async function enterFullscreen() {
-  if (document.fullscreenElement) return;
+async function toggleFullscreen() {
   try {
-    await document.documentElement.requestFullscreen();
-    devicePanelOpen = false;
-    syncDevicePanel();
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else {
+      await document.documentElement.requestFullscreen();
+      devicePanelOpen = false;
+      syncDevicePanel();
+    }
     viewport.refresh();
   } catch { showToast("Fullscreen is not available in this browser."); }
 }
 installFullscreenGesture({ target: elements.app,
-  enabled: () => store.state.isConnected && store.state.started && !demoActive && !widgets.editing
-    && !document.fullscreenElement && Boolean(elements.video.srcObject) && elements.video.readyState >= 2,
-  enter: enterFullscreen
+  enabled: () => !widgets.editing && (Boolean(document.fullscreenElement) || demoActive ||
+    (store.state.isConnected && store.state.started && Boolean(elements.video.srcObject) && elements.video.readyState >= 2)),
+  toggle: toggleFullscreen
 });
-elements.fullscreen.addEventListener("click", async () => {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await enterFullscreen();
-    viewport.refresh();
-  } catch { showToast("Fullscreen is not available in this browser."); }
-});
+elements.fullscreen.addEventListener("click", toggleFullscreen);
 document.addEventListener("fullscreenchange", () => {
   elements.fullscreen.setAttribute("aria-pressed", String(Boolean(document.fullscreenElement)));
   elements.fullscreen.setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Toggle fullscreen");
