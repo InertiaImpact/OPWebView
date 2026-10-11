@@ -6,6 +6,13 @@ import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
 import { createPresetLayout } from "../public/src/widgets/layout-presets.js";
 
+test("unconfirmed comma.local is hidden without removing the discovery fallback", async () => {
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  const discovery = await readFile(new URL("../public/src/core/device-discovery.js", import.meta.url), "utf8");
+  assert.match(app, /listedDevices = devices;[\s\S]*?devices = devices\.filter\(\(device\) => device\.host\.toLowerCase\(\)\.replace\(\/\\\.\$\/, ""\) !== "comma\.local" \|\| device\.reachable === true\)/);
+  assert.match(discovery, /DEFAULT_CANDIDATES = \["comma\.local"\]/);
+});
+
 test("editing menus overlay unchanged widget bounds and can collapse independently", async () => {
   const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
   const page = await readFile(new URL("../public/index.html", import.meta.url), "utf8");

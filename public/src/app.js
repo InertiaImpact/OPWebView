@@ -180,6 +180,8 @@ function openDiagnostics() {
 
 function renderDevices(devices) {
   listedDevices = devices;
+  // Keep the hostname fallback in discovery, not as an unconfirmed UI entry.
+  devices = devices.filter((device) => device.host.toLowerCase().replace(/\.$/, "") !== "comma.local" || device.reachable === true);
   const available = devices.some((device) => device.reachable === true);
   elements.demo.hidden = available;
   if (available && demoActive) stopDemo();
