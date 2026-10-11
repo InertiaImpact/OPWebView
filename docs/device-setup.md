@@ -4,7 +4,7 @@
 
 The native opview client can POST directly to `http://<device>:5001/stream`. A web page has an origin, so the browser first requires a successful CORS preflight for the JSON POST and then requires an `Access-Control-Allow-Origin` header on the SDP response.
 
-Current stock openpilot also starts `webrtcd` only for its existing livestream/not-car conditions and defaults the HTTP listener to `127.0.0.1`. A phone on Wi-Fi therefore cannot assume that port 5001 is listening on the comma's LAN address while driving.
+Stock openpilot versions targeted by the included patch start `webrtcd` only for livestream/not-car conditions and default the HTTP listener to `127.0.0.1`. Behavior depends on the installed revision: a phone on Wi-Fi cannot assume port 5001 is exposed while driving.
 
 Depending on the fork and version, three compatibility changes may be required:
 
@@ -14,7 +14,13 @@ Depending on the fork and version, three compatibility changes may be required:
 
 Dragonpilot and other forks that already support the native opview client may already provide the first two. They still need to be checked for browser CORS support.
 
-## gerrylum/openpilot `rx-wb`
+## gerrylum/openpilot `rx-wb-stg` (current tested target)
+
+The [checked revision `7dd9234`](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/system/webrtc/webrtcd.py) includes CORS headers and the browser preflight handler, in addition to on-road streaming and LAN binding when `OpviewEnabled` is enabled. **No additional browser patch is needed for that revision.** Enable OPView streaming in the device's developer settings and allow local-network access in the viewing browser. Discovery still requires the daemon to be running, normally on-road.
+
+See [the pinned telemetry comparison](rx-wb-stg-telemetry.md) for rate changes and remaining indicator precision limitations. These notes describe inspected revisions, not a guarantee about every future branch update.
+
+## Older gerrylum/openpilot `rx-wb`
 
 The `rx-wb` branch at commit `0bbf417` already includes the device-side opview work that a native client needs:
 
@@ -23,15 +29,15 @@ The `rx-wb` branch at commit `0bbf417` already includes the device-side opview w
 - a `0.0.0.0` WebRTC listener while opview is enabled;
 - opview-specific telemetry rate limiting, compact model messages, and sessions without the stock five-minute timeout.
 
-It does not currently return CORS headers, and its `OPTIONS` handler returns 405 for `/stream`. Apply the smaller [gerrylum-rx-wb-browser-cors.patch](../device/gerrylum-rx-wb-browser-cors.patch) to that branch. Do not apply the full stock-openpilot patch: its process and LAN-listener changes are already present in `rx-wb`.
+That revision lacks CORS headers, and its `OPTIONS` handler returns 405 for `/stream`. For an unpatched checkout of that revision, use [gerrylum-rx-wb-browser-cors.patch](../device/gerrylum-rx-wb-browser-cors.patch). Do not apply it to rx-wb-stg or blindly reapply it after a fork incorporates the fix. The full stock-openpilot patch is not needed because streaming and LAN-listener changes are already present.
 
 After applying it, reboot or restart openpilot. On the comma, enable **Settings → Developer → Show advanced controls → opview Screen Streaming**. The branch notes that the toggle takes effect the next time the car is turned on. The WebRTC daemon is intentionally available for opview while the car is on-road, so browser discovery will not succeed while the car is off unless another livestream condition has started it.
 
 The web client probes the cereal schema and automatically selects this branch's current `extrinsicsCalibration` and `narrowRoadCameraState` names, while retaining compatibility with older opview builds that used `liveCalibration` and `roadCameraState`.
 
-## Current stock-openpilot change
+## Other stock-openpilot revisions
 
-Apply the included [openpilot-webrtcd-cors.patch](../device/openpilot-webrtcd-cors.patch) to a current openpilot checkout, or make the equivalent change in your fork. Despite the filename, the patch covers the full browser-streaming compatibility set:
+The included [openpilot-webrtcd-cors.patch](../device/openpilot-webrtcd-cors.patch) is a reference compatibility change; check it against your exact checkout before applying. Despite the filename, it covers the full browser-streaming compatibility set:
 
 - starts the streaming encoder and WebRTC daemon while on-road;
 - binds the WebRTC HTTP listener to the LAN;
@@ -41,7 +47,7 @@ Apply the included [openpilot-webrtcd-cors.patch](../device/openpilot-webrtcd-co
 - returns an `Access-Control-Allow-Origin` value;
 - includes the legacy private-network opt-in header for compatible Chrome versions.
 
-Restart the openpilot manager or reboot after applying the change. Keep normal browser Local Network Access permission enabled for the OP WebView origin.
+Only make device changes or restart the manager/reboot while parked and off-road. Keep normal browser Local Network Access permission enabled for the OP WebView origin.
 
 For a tighter deployment, replace the wildcard origin with your exact Pages origin, for example:
 

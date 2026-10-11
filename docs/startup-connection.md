@@ -2,7 +2,14 @@
 
 On each load, DEV checks the browser's `local-network` permission (with `local-network-access` fallback). If denied, it explains how to allow access in site settings; webpages cannot override a denial. For prompt/unknown states, the local schema fetch attempts to trigger the browser's permission prompt. If the browser requires interaction, use **Scan network** in the floating left device panel. The **+** button opens manual IP entry without automatically focusing the input.
 
-The top toolbar and welcome screen are replaced by a responsive device panel (280–380 px, limited by the available screen). Found devices appear as discovery progresses; Connect appears only for reachable devices, and Demo disappears when a device is available. Scan and Demo use a two-column row, with optional logs/fullscreen/install under Tools. Successful connections hide the panel and its launcher. Devices/logs remain accessible through the editing Views panel. Long-press the full dashboard for 700 ms to unlock editing, with Views/saved layouts floating left and widget checkboxes floating right. Both menus collapse independently; Done stays accessible. Menus never change the widget workspace bounds, so editing uses the actual viewing geometry. Done or Escape locks it again; desktop users can also right-click or use Shift+L. Drags, controls and cancelled gestures do not unlock. Compact/camera-only presentation closes editing without altering saved geometry.
+## Floating controls
+
+- The responsive device panel replaces the toolbar/welcome screen. Devices appear as discovery progresses; **Connect** is shown only for reachable devices and **Demo** hides when one is available.
+- **Tools** holds logs, fullscreen and installation. A successful connection hides both the panel and its launcher; reopen **Devices / logs** from the editing Views menu.
+- Long-press the full dashboard for 700 ms to edit. Views/saved layouts float left; widget checkboxes float right. Collapse either menu to reach widgets underneath. Neither menu resizes the actual layout, and **Done** stays accessible.
+- **Done** or Escape locks editing. Desktop users can also right-click or use Shift+L. Drags, controls and cancelled gestures do not unlock. Compact/camera-only presentation closes editing without changing saved geometry.
+
+## Automatic connection
 
 Saved devices and `comma.local` are probed immediately and in parallel. A reachable previously connected device triggers an immediate connection. The first newly discovered device triggers a five-second delay and is checked again before connection. If a saved device responds during that countdown, it takes priority. Only successful connections enter the saved history from this version onward; older saved entries are retained.
 

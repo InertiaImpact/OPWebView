@@ -16,6 +16,6 @@ The comma confidence display and OPView confidence widget also differ visually: 
 
 ## Parked test
 
-Reopen DEV online while disconnected to install `2026.10.11-auto-connect.1-dev`, which includes these indicator changes. Compare Enhanced/Detailed torque and confidence responsiveness with the prior stable version. Record whether steering mode is TORQUE or ANGLE and include the diagnostic build when reporting a mismatch. Test fullscreen/background return separately; the native floating window remains camera-only. Never interact with the viewer while driving.
+Reopen dev online while disconnected to receive the latest complete cached release. Compare Enhanced/Detailed torque and confidence responsiveness with stable. Record whether steering mode is TORQUE or ANGLE and include the diagnostic build when reporting a mismatch. Test fullscreen/background return separately; the native floating window remains camera-only. Never interact with the viewer while driving.
 
 Sources: [slim telemetry](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/system/webrtc/opview_slim.py), [model payload](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/system/webrtc/webrtcd.py), [comma torque renderer](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/selfdrive/ui/mici/onroad/torque_bar.py), [OPView state](https://github.com/gerrylum/opview/blob/8b1b2abbe2ef85b22f69a4eabdd187dba2ca02c1/lib/selfdrive/ui/ui_state.dart).
