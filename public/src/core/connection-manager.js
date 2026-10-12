@@ -18,6 +18,7 @@ export class ConnectionManager extends EventTarget {
     this.connecting = false;
     this.userClosed = false;
     this.wakeLock = null;
+    this.generation = 0;
 
     transport.addEventListener("data", (event) => {
       if (adapter.apply(event.detail) > 0) transport.markTelemetryReceived?.(adapter.lastAppliedTypes);
@@ -37,36 +38,48 @@ export class ConnectionManager extends EventTarget {
     transport.addEventListener("health", (event) => this.dispatchEvent(new CustomEvent("health", { detail: event.detail })));
   }
 
-  async connect(input, { remember = true } = {}) {
+  async connect(input, { remember = true, camera = this.streamType } = {}) {
     if (this.connecting) return;
+    const generation = ++this.generation;
     this.device = typeof input === "string" ? normalizeHost(input) : input;
     this.userClosed = false;
     this.connecting = true;
+    const switching = camera !== this.streamType;
+    this.streamType = camera;
     clearTimeout(this.retryTimer);
+    this.retryTimer = null;
     this.adapter.reset();
     this.store.update((state) => {
       state.streamType = this.streamType;
-      state.isSwitchingStream = false;
+      state.isSwitchingStream = switching;
     });
     this.dispatchEvent(new CustomEvent("state", { detail: "connecting" }));
     try {
       await this.transport.connect(this.device, { camera: this.streamType });
+      if (generation !== this.generation || this.userClosed) throw new Error("The connection attempt was cancelled.");
       if (remember) this.device = this.discovery.remember(this.device);
       this.retryCount = 0;
       this.store.setConnection(true);
       this.dispatchEvent(new CustomEvent("connected", { detail: this.device }));
       await this.acquireWakeLock();
+      if (generation !== this.generation || this.userClosed) throw new Error("The connection attempt was cancelled.");
     } catch (error) {
+      if (generation !== this.generation) throw error;
       this.store.setConnection(false);
       this.dispatchEvent(new CustomEvent("error", { detail: error }));
       if (!this.userClosed && this.retryCount > 0) this.scheduleReconnect();
       throw error;
     } finally {
-      this.connecting = false;
+      if (generation === this.generation) {
+        this.connecting = false;
+        this.store.update((state) => { state.isSwitchingStream = false; });
+        this.switchCameraIfNeeded();
+      }
     }
   }
 
   async disconnect() {
+    this.generation++;
     this.userClosed = true;
     clearTimeout(this.retryTimer);
     this.retryTimer = null;
@@ -76,6 +89,7 @@ export class ConnectionManager extends EventTarget {
     await this.transport.close();
     await this.releaseWakeLock();
     this.store.setConnection(false);
+    this.store.update((state) => { state.isSwitchingStream = false; });
     this.dispatchEvent(new CustomEvent("state", { detail: "disconnected" }));
   }
 
@@ -96,6 +110,10 @@ export class ConnectionManager extends EventTarget {
   }
 
   switchCameraIfNeeded() {
+    // Telemetry arrives before video readiness. Never close an opening session,
+    // and never start two camera handoffs at once. Re-evaluate the latest mode
+    // and speed when the active negotiation finishes (same 10/15 m/s hysteresis).
+    if (this.connecting || this.userClosed || !this.device || !this.store.state.isConnected) return;
     const state = this.store.state;
     let target = "road";
     if (state.experimentalMode) {
@@ -103,14 +121,10 @@ export class ConnectionManager extends EventTarget {
       else if (state.vEgo <= ROAD_CAMERA_MIN_SPEED) return;
     }
     if (target === this.streamType) return;
-    this.streamType = target;
-    this.store.update((next) => {
-      next.streamType = target;
-      next.isSwitchingStream = true;
-    });
-    this.transport.close().then(() => this.connect(this.device, { remember: false })).then(() => {
-      this.store.update((next) => { next.isSwitchingStream = false; });
-    }).catch(() => {});
+    this.dispatchEvent(new CustomEvent("progress", { detail: `Switching camera: ${this.streamType} → ${target}` }));
+    // Transport.connect owns closing/replacing its previous peer; there is no
+    // separate close/reconnect gap where another telemetry packet can intervene.
+    this.connect(this.device, { remember: false, camera: target }).catch(() => {});
   }
 
   async acquireWakeLock() {

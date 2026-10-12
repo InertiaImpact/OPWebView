@@ -45,6 +45,7 @@ export class WebRTCTransport extends EventTarget {
   async connect(device, { camera = "road" } = {}) {
     const generation = ++this.generation;
     await this.close({ invalidate: false });
+    if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
     this.readiness = createReadinessState();
     this.dispatchState("connecting");
     this.dispatchProgress("Creating a secure camera and telemetry session…");
@@ -65,6 +66,7 @@ export class WebRTCTransport extends EventTarget {
     peer.addEventListener("track", (event) => {
       if (generation !== this.generation || event.track.kind !== "video") return;
       this.readiness.videoTrack = true;
+      this.dispatchProgress(`Camera track received (${camera}). Waiting for a playable frame…`);
       this.videoElement.srcObject = event.streams[0] || new MediaStream([event.track]);
       const markFrame = () => this.markVideoReady(generation);
       this.videoElement.addEventListener("playing", markFrame, { once: true });
@@ -93,15 +95,19 @@ export class WebRTCTransport extends EventTarget {
       offer.sdp = preferH264(offer.sdp || "");
       await peer.setLocalDescription(offer);
       await waitForIceGathering(peer, 5000);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
 
-      this.dispatchProgress("Requesting the road camera and openpilot data…");
+      this.dispatchProgress(`Requesting the ${camera === "wideRoad" ? "wide-road" : "road"} camera and openpilot data…`);
       const services = await resolveBridgeServices(device);
       const response = await postStreamWithFallback(device, peer.localDescription?.sdp || offer.sdp, camera, services);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
       await peer.setRemoteDescription(new RTCSessionDescription(response));
       await waitForPeerConnection(peer, 15000);
+      if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
+      this.startupDiagnosticTimer = setTimeout(() => this.reportStartupReadiness(generation, camera), 5000);
       await this.waitForStreams(generation, 20000);
+      if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
+      clearTimeout(this.startupDiagnosticTimer);
       if (generation === this.generation) {
         this.startTelemetryHealth();
         this.dispatchState("connected");
@@ -153,6 +159,23 @@ export class WebRTCTransport extends EventTarget {
     this.dispatchProgress("Camera is live. Waiting for telemetry data…");
   }
 
+  async reportStartupReadiness(generation, camera) {
+    const peer = this.peer;
+    if (generation !== this.generation || !peer) return;
+    let packets = 0, decoded = 0;
+    try {
+      const reports = await peer.getStats();
+      reports.forEach((report) => {
+        if (report.type === "inbound-rtp" && (report.kind || report.mediaType) === "video") {
+          packets += report.packetsReceived || 0;
+          decoded += report.framesDecoded || 0;
+        }
+      });
+    } catch {}
+    if (generation !== this.generation || peer !== this.peer) return;
+    this.dispatchProgress(`Camera startup snapshot (${camera}): track=${this.readiness.videoTrack}; readyState=${this.videoElement.readyState}; paused=${this.videoElement.paused}; packets=${packets}; decoded=${decoded}; telemetry=${this.hasFreshTelemetry() ? "fresh" : "missing/stale"}`);
+  }
+
   markTelemetryReceived(types, now = performance.now()) {
     for (const type of types || []) {
       if (LIVE_SERVICES.includes(type)) this.lastTelemetry.set(type, now);
@@ -168,6 +191,7 @@ export class WebRTCTransport extends EventTarget {
 
   startTelemetryHealth() {
     clearInterval(this.healthTimer);
+    clearTimeout(this.startupDiagnosticTimer);
     this.resumeTelemetryHealth();
     this.healthTimer = setInterval(() => this.checkTelemetryHealth(), 1000);
   }
@@ -211,6 +235,7 @@ export class WebRTCTransport extends EventTarget {
     this.peer = null;
     this.readiness = createReadinessState();
     clearInterval(this.healthTimer);
+    clearTimeout(this.startupDiagnosticTimer);
     this.healthTimer = null;
     this.lastTelemetry.clear();
     this.healthGraceUntil = 0;
