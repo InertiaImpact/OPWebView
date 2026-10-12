@@ -5,6 +5,7 @@ import { storageKey } from "../core/app-channel.js";
 import { IndicatorSmoother } from "./indicator-smoothing.js";
 import { paintIndicator } from "./indicator-renderer.js";
 import { browserStorage, readStored, writeStored, removeStored } from "../core/storage.js";
+import { trackPointerDrag } from "../core/pointer-drag.js";
 const STORAGE_KEY = storageKey("opwebview.layout.v2");
 const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
 const LEGACY_KEY = storageKey("opwebview.layout.v1");
@@ -171,6 +172,7 @@ export class WidgetManager extends EventTarget {
   }
 
   setDisplayMode(mode, suspended = false) {
+    this.stopDrag?.();
     if (this.indicatorFrame) cancelAnimationFrame(this.indicatorFrame);
     this.indicatorFrame = null;
     this.indicators?.pause();
@@ -183,6 +185,7 @@ export class WidgetManager extends EventTarget {
   refreshGeometry() {
     const { width, height } = this.layer.getBoundingClientRect();
     if (!width || !height) return;
+    if (this.bounds && (width !== this.bounds.width || height !== this.bounds.height)) this.stopDrag?.();
     this.bounds = { width, height };
     this.geometryMetric = this.store.state.isMetric;
     const preset = BUILT_IN_LAYOUTS[this.activeLayout] ? this.activeLayout : null;
@@ -206,6 +209,7 @@ export class WidgetManager extends EventTarget {
   }
 
   setEditing(value) {
+    this.stopDrag?.();
     if (value && BUILT_IN_LAYOUTS[this.activeLayout] && this.displayMode === "full") this.layout = structuredClone(this.presentedLayout);
     this.editing = Boolean(value);
     this.layer.classList.toggle("editing", this.editing);
@@ -225,6 +229,7 @@ export class WidgetManager extends EventTarget {
 
   applyPreset(id) {
     if (!BUILT_IN_LAYOUTS[id]) return false;
+    this.stopDrag?.();
     this.layout = createPresetLayout(id);
     this.activeLayout = id;
     this.applyAll();
@@ -262,6 +267,7 @@ export class WidgetManager extends EventTarget {
     const layouts = this.namedLayouts();
     const saved = Object.hasOwn(layouts, name) ? layouts[name] : null;
     if (!saved) return false;
+    this.stopDrag?.();
     this.layout = normalizeLayout(saved);
     this.activeLayout = `saved:${name}`;
     this.applyAll();
@@ -342,12 +348,14 @@ export class WidgetManager extends EventTarget {
   }
 
   startDrag(event, id) {
-    if (!this.editing || this.displayMode !== "full" || event.target.closest("button")) return;
+    if (!this.editing || this.displayMode !== "full" || event.isPrimary === false || event.button !== 0 || event.target.closest("button")) return;
+    this.stopDrag?.();
+    const bounds = this.layer.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
     event.preventDefault();
     this.markCustom();
-    const start = { x: event.clientX, y: event.clientY, ...this.layout[id] };
+    const start = { ...this.layout[id] };
     this.trackPointer(event, ({ dx, dy }) => {
-      const bounds = this.layer.getBoundingClientRect();
       this.layout[id].x = snap(clamp(start.x + dx / bounds.width * 100, 0, 100 - start.w));
       this.layout[id].y = snap(clamp(start.y + dy / bounds.height * 100, 0, 100 - start.h));
       this.applyLayout(id);
@@ -355,13 +363,15 @@ export class WidgetManager extends EventTarget {
   }
 
   startResize(event, id) {
-    if (!this.editing || this.displayMode !== "full") return;
+    if (!this.editing || this.displayMode !== "full" || event.isPrimary === false || event.button !== 0) return;
+    this.stopDrag?.();
+    const bounds = this.layer.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
     event.preventDefault();
     event.stopPropagation();
     this.markCustom();
-    const start = { x: event.clientX, y: event.clientY, ...this.layout[id] };
+    const start = { ...this.layout[id] };
     this.trackPointer(event, ({ dx, dy }) => {
-      const bounds = this.layer.getBoundingClientRect();
       this.layout[id].w = snap(clamp(start.w + dx / bounds.width * 100, 7, 100 - start.x));
       this.layout[id].h = snap(clamp(start.h + dy / bounds.height * 100, 8, 100 - start.y));
       this.applyLayout(id);
@@ -369,20 +379,7 @@ export class WidgetManager extends EventTarget {
   }
 
   trackPointer(event, onMove) {
-    const target = event.currentTarget;
-    const pointerId = event.pointerId;
-    const origin = { x: event.clientX, y: event.clientY };
-    target.setPointerCapture(pointerId);
-    const move = (next) => onMove({ dx: next.clientX - origin.x, dy: next.clientY - origin.y });
-    const end = () => {
-      target.removeEventListener("pointermove", move);
-      target.removeEventListener("pointerup", end);
-      target.removeEventListener("pointercancel", end);
-      this.save();
-    };
-    target.addEventListener("pointermove", move);
-    target.addEventListener("pointerup", end);
-    target.addEventListener("pointercancel", end);
+    this.stopDrag = trackPointerDrag(event, { onMove, onEnd: () => { this.stopDrag = null; this.save(); } });
   }
 }
 
@@ -392,4 +389,4 @@ function isLayout(value) {
 }
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
-const snap = (value) => Math.round(value * 2) / 2;
+const snap = (value) => Math.round(value * 100) / 100;

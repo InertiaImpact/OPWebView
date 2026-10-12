@@ -12,6 +12,7 @@ import { StartupConnection, localNetworkPermission } from "./core/startup-connec
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
 import { DevWatermark } from "./core/dev-watermark.js";
 import { installLayoutGesture } from "./core/layout-gesture.js";
+import { installPanelDrag } from "./core/movable-panel.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -94,6 +95,10 @@ let toastTimer = null;
 let updateRegistration = null;
 let networkPermission = null;
 let updateReloadPending = false;
+const editorPanels = [elements.editTray, elements.widgetPanel].map((panel) => installPanelDrag({
+  panel, handle: panel.querySelector(".dock-header"), boundsElement: elements.app,
+  enabled: () => widgets.editing
+}));
 const startup = new StartupConnection({ discovery,
   permission: refreshNetworkPermission,
   connect: (device) => connectDevice(device, { automatic: true }),
@@ -376,6 +381,7 @@ function toggleEditing(force) {
   elements.editTray.hidden = !editing;
   elements.widgetPanel.hidden = !editing;
   if (editing) renderLayoutDialog();
+  for (const panel of editorPanels) editing ? panel.constrain() : panel.cancelDrag();
   syncDevicePanel();
 }
 

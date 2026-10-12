@@ -6,7 +6,7 @@ On each load, DEV checks the browser's `local-network` permission (with `local-n
 
 - The responsive device panel replaces the toolbar/welcome screen. Devices appear as discovery progresses; the `comma.local` fallback is listed only if reachable. **Connect** is shown only for reachable devices and **Demo** hides when one is available.
 - A device/wireless icon and **Devices** label toggle the panel: integrated into its open header, or a compact top-left pill when collapsed. **Tools** holds logs, fullscreen and installation. A successful connection hides both the panel and its launcher; reopen **Devices / logs** from the editing Views menu.
-- Long-press the full dashboard for 700 ms to edit. Views/saved layouts float left; widget checkboxes float right. Collapse either menu to reach widgets underneath. Neither menu resizes the actual layout, and **Done** stays accessible.
+- Long-press the full dashboard for 700 ms to edit. Drag widgets by their title bars and resize with their bottom-right handles. Views/saved layouts float left; widget checkboxes float right. Drag either menu by its header (or focus the header and use arrow keys), or collapse it to reach widgets underneath. Menus stay inside the viewport and do not resize the layout; their positions last only for this session. **Done** stays accessible.
 - **Done** or Escape locks editing. Desktop users can also right-click or use Shift+L. Drags, controls and cancelled gestures do not unlock. Compact/camera-only presentation closes editing without changing saved geometry.
 
 ## Automatic connection

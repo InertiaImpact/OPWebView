@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
@@ -79,7 +79,7 @@
         </section>
 
         <aside id="edit-tray" class="floating-panel view-panel" hidden aria-label="Views and layout tools">
-          <header class="dock-header"><span>Views</span><span id="layout-label">Classic</span><button class="panel-collapse" type="button" aria-label="Collapse views" aria-expanded="true">−</button></header>
+          <header class="dock-header panel-drag-handle" tabindex="0" aria-label="Move Views menu" title="Drag to move; use arrow keys when focused"><span>Views</span><span id="layout-label">Classic</span><button class="panel-collapse" type="button" aria-label="Collapse views" aria-expanded="true">−</button></header>
           <div id="layout-presets" class="layout-presets"></div>
           <div class="section-heading"><span>Saved views</span></div>
           <div id="saved-layouts" class="saved-layouts"></div>
@@ -92,7 +92,7 @@
           <button id="done-editing-button" type="button">Done</button>
         </aside>
         <aside id="widget-panel" class="floating-panel widget-panel" hidden aria-label="Visible widgets">
-          <header class="dock-header"><span>Widgets</span><button class="panel-collapse" type="button" aria-label="Collapse widgets" aria-expanded="true">−</button></header>
+          <header class="dock-header panel-drag-handle" tabindex="0" aria-label="Move Widgets menu" title="Drag to move; use arrow keys when focused"><span>Widgets</span><button class="panel-collapse" type="button" aria-label="Collapse widgets" aria-expanded="true">−</button></header>
           <div id="widget-toggles" class="widget-toggles"></div>
         </aside>
       </section>
@@ -156,6 +156,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=21"></script>
+    <script type="module" src="./src/app.js?v=22"></script>
   </body>
 </html>

@@ -726,6 +726,13 @@ html, body { min-width: 0; }
 .floating-panel.panel-collapsed .dock-header { margin-bottom: 0; }
 .floating-panel.panel-collapsed #layout-label { display: none; }
 .panel-collapse { margin-left: auto; }
+/* Handles own the gesture before Android can turn it into panel scrolling. */
+.widget-edit-bar, .widget-resize, .panel-drag-handle { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.panel-drag-handle { cursor: grab; }
+.panel-drag-handle::before { content: "⠿"; color: var(--muted); }
+.panel-drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.panel-dragging { z-index: 36; }
+.panel-dragging .panel-drag-handle { cursor: grabbing; }
 .device-panel-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 12px; background: #08141eed; color: var(--text); font-size: 13px; font-weight: 750; cursor: pointer; }
 .app > .device-panel-toggle { position: absolute; z-index: 36; left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); box-shadow: 0 6px 20px #0004; }
 .device-panel .device-panel-toggle { min-height: 44px; padding: 0; border: 0; background: transparent; }
