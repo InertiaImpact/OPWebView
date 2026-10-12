@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=11" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
@@ -38,9 +38,14 @@
   <body>
     <main id="app" class="app" data-status="disconnected">
       <div class="dev-watermark" aria-label="Development version">DEV</div>
-      <button id="controls-toggle" class="device-panel-toggle" type="button" aria-label="Show devices" aria-expanded="true" aria-controls="device-panel">⌁</button>
       <aside id="device-panel" class="floating-panel device-panel" aria-label="Comma devices">
-        <header class="dock-header"><span>Devices</span><span id="connection-pill" class="connection-pill">Offline</span></header>
+        <header class="dock-header">
+          <button id="controls-toggle" class="device-panel-toggle" type="button" aria-label="Collapse devices" aria-expanded="true" aria-controls="device-panel">
+            <svg class="device-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="11" height="14" rx="2"/><path d="M7 17h3M16 3a8 8 0 0 1 6 7M16 7a4 4 0 0 1 2.5 3"/></svg>
+            <span>Devices</span><span class="device-toggle-chevron" aria-hidden="true">▴</span>
+          </button>
+          <span id="connection-pill" class="connection-pill">Offline</span>
+        </header>
         <div id="startup-status" hidden aria-label="Automatic device connection">
           <span id="startup-message" role="status" aria-live="polite"></span>
           <button id="startup-cancel" type="button" hidden>Cancel</button>
@@ -151,6 +156,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=19"></script>
+    <script type="module" src="./src/app.js?v=20"></script>
   </body>
 </html>

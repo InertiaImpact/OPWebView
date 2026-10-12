@@ -716,7 +716,7 @@ html, body { min-width: 0; }
   border: 1px solid #ffffff24; border-radius: 14px; background: #08141eed;
   box-shadow: 0 10px 35px #0005; font-size: 13px; pointer-events: auto;
 }
-.device-panel { left: max(52px, calc(env(safe-area-inset-left) + 44px)); width: clamp(280px, 32vw, 380px); max-width: calc(100vw - 72px); }
+.device-panel { left: max(16px, env(safe-area-inset-left)); width: clamp(280px, 32vw, 380px); max-width: calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))); }
 .view-panel { left: max(12px, env(safe-area-inset-left)); }
 .widget-panel { right: max(12px, env(safe-area-inset-right)); }
 .app { --editor-dock-width: min(260px, 26vw); }
@@ -726,7 +726,12 @@ html, body { min-width: 0; }
 .floating-panel.panel-collapsed .dock-header { margin-bottom: 0; }
 .floating-panel.panel-collapsed #layout-label { display: none; }
 .panel-collapse { margin-left: auto; }
-.device-panel-toggle { position: absolute; z-index: 36; left: max(8px, env(safe-area-inset-left)); top: 46%; width: 36px; height: 48px; border: 1px solid #ffffff30; border-radius: 9px; background: #08141ec9; color: var(--accent); font-size: 24px; cursor: pointer; }
+.device-panel-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 12px; background: #08141eed; color: var(--text); font-size: 13px; font-weight: 750; cursor: pointer; }
+.app > .device-panel-toggle { position: absolute; z-index: 36; left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); box-shadow: 0 6px 20px #0004; }
+.device-panel .device-panel-toggle { min-height: 44px; padding: 0; border: 0; background: transparent; }
+.device-menu-icon { width: 24px; height: 24px; flex: none; color: var(--accent); }
+.device-toggle-chevron { color: var(--muted); }
+.device-panel-toggle[aria-expanded="false"] .device-toggle-chevron { transform: rotate(180deg); }
 .dock-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; font-size: 14px; font-weight: 750; }
 .dock-header #layout-label { color: var(--muted); font-size: 12px; }
 .floating-panel button { min-height: 36px; padding: 7px 10px; border: 1px solid #ffffff20; border-radius: 7px; background: #ffffff0a; cursor: pointer; }
@@ -766,6 +771,7 @@ html, body { min-width: 0; }
 .app.layout-editing .widget-layer { opacity: 1; }
 .app[data-presentation="camera"] .floating-panel, .app[data-presentation="camera"] .device-panel-toggle { display: none; }
 @media (max-width: 600px), (max-height: 420px) {
+  .app > .device-panel-toggle { top: max(8px, env(safe-area-inset-top)); }
   .floating-panel { padding: 10px; top: max(8px, env(safe-area-inset-top)); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .widget-panel .widget-toggle { padding: 0 5px; }
   .widget-panel .widget-toggle label { font-size: 11px; }

@@ -1,10 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { installLayoutGesture } from "../public/src/core/layout-gesture.js";
 import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
 import { createPresetLayout } from "../public/src/widgets/layout-presets.js";
+
+test("one Devices control moves between the open header and collapsed pill and hides when connected", async () => {
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  const page = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  assert.match(page, /<header class="dock-header">\s*<button id="controls-toggle"/);
+  assert.match(page, /class="device-menu-icon"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(css, /\.device-panel-toggle\s*\{[^}]*top:\s*46%/);
+  const source = app.match(/function syncDevicePanel\(\) \{[\s\S]*?\n\}/)[0];
+  const control = { attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+  const parent = () => ({ insertBefore(child) { child.parentElement = this; } });
+  const header = parent(), root = Object.assign(parent(), { dataset: { status: "disconnected" } });
+  const elements = { app: root, controlsToggle: control, devicePanel: { querySelector: () => header }, connectionPill: {} };
+  for (const [open, editing, connected, visible] of [
+    [true, false, false, true], [false, false, false, true],
+    [true, false, false, true], [false, false, true, false],
+    [true, true, true, false], [true, false, true, true]
+  ]) {
+    root.dataset.status = connected ? "connected" : "disconnected";
+    runInNewContext(`${source}; syncDevicePanel();`, { elements, widgets: { editing }, devicePanelOpen: open });
+    assert.equal(control.hidden, !visible);
+    assert.equal(control.parentElement, open && !editing ? header : root);
+    assert.equal(control.attributes["aria-expanded"], String(open && !editing));
+    assert.equal(control.attributes["aria-label"], open && !editing ? "Collapse devices" : "Show devices");
+  }
+});
 
 test("unconfirmed comma.local is hidden without removing the discovery fallback", async () => {
   const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");

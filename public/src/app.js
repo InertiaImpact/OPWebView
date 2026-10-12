@@ -141,8 +141,15 @@ function setConnectionStatus(status, label) {
 
 function syncDevicePanel() {
   elements.devicePanel.hidden = widgets.editing || !devicePanelOpen;
+  const open = !elements.devicePanel.hidden;
+  const parent = open ? elements.devicePanel.querySelector(".dock-header") : elements.app;
+  // One control and handler: part of the open header, a top-left pill when closed.
+  if (elements.controlsToggle.parentElement !== parent) {
+    parent.insertBefore(elements.controlsToggle, open ? elements.connectionPill : elements.devicePanel);
+  }
   elements.controlsToggle.hidden = widgets.editing || (!devicePanelOpen && elements.app.dataset.status === "connected");
-  elements.controlsToggle.setAttribute("aria-expanded", String(!elements.devicePanel.hidden));
+  elements.controlsToggle.setAttribute("aria-expanded", String(open));
+  elements.controlsToggle.setAttribute("aria-label", open ? "Collapse devices" : "Show devices");
 }
 
 function openConnectionDialog() {
@@ -486,6 +493,7 @@ widgets.addEventListener("layoutchange", () => {
 elements.controlsToggle.addEventListener("click", () => {
   devicePanelOpen = !devicePanelOpen;
   syncDevicePanel();
+  if (!elements.controlsToggle.hidden) elements.controlsToggle.focus({ preventScroll: true });
 });
 async function toggleFullscreen() {
   try {
