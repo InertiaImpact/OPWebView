@@ -21,6 +21,8 @@ The app reports a live session only after camera playback plus fresh parsed `car
 
 Double-tap a non-interactive area of the viewer to **toggle** fullscreen while on-road telemetry and a playing WebRTC video are active, or in demo. Double-tap can also exit fullscreen after a stream stops. Buttons, links, inputs, dialogs, side docks, dragging and layout editing are excluded. The second tap toggles fullscreen directly, preserving the browser's user-gesture requirement. The fullscreen button shares the same toggle handler. Native Android video PiP stays camera-only.
 
+Camera handoffs wait for startup/any current negotiation to finish and use the latest Experimental mode and speed, retaining the 10/15 m/s hysteresis. Logs name each handoff and camera track; a delayed startup adds a one-time packet/decode/readiness snapshot after five seconds. Cancellation cannot mark a superseded session connected. These changes do not require clearing site data or modifying the comma.
+
 The camera video is a non-interactive presentation layer; pointer gestures reach the viewer instead of the browser's native video menu. Selection/callouts are disabled on the viewer before the gesture starts, and its context-menu handler runs in capture phase. Buttons, fields and side panels retain their own touch and scrolling behavior.
 
 Browser permission prompts, actual local device reachability and Android fullscreen require a parked hardware test. Unit tests exercise delay/priority/cancellation/permission fallback and gesture boundaries; browser smoke testing does not connect to or change a comma.
