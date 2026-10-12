@@ -2,6 +2,9 @@ import { WIDGETS } from "./widget-catalog.js";
 import { BUILT_IN_LAYOUTS, createPresetLayout, normalizeLayout, presetGeometry, sanitizeLayoutName } from "./layout-presets.js";
 
 import { storageKey } from "../core/app-channel.js";
+import { IndicatorSmoother } from "./indicator-smoothing.js";
+import { paintIndicator } from "./indicator-renderer.js";
+import { browserStorage, readStored, writeStored, removeStored } from "../core/storage.js";
 const STORAGE_KEY = storageKey("opwebview.layout.v2");
 const NAMED_KEY = storageKey("opwebview.layouts.named.v1");
 const LEGACY_KEY = storageKey("opwebview.layout.v1");
@@ -9,7 +12,7 @@ const LEGACY_KEY = storageKey("opwebview.layout.v1");
 export { WIDGETS, BUILT_IN_LAYOUTS, createPresetLayout, sanitizeLayoutName };
 
 export class WidgetManager extends EventTarget {
-  constructor({ layer, toggles, store, storage = globalThis.localStorage }) {
+  constructor({ layer, toggles, store, storage = browserStorage() }) {
     super();
     this.layer = layer;
     this.toggles = toggles;
@@ -24,35 +27,45 @@ export class WidgetManager extends EventTarget {
     this.collapsed = new Set();
     this.lastRender = 0;
     this.elements = new Map();
+    this.indicators = new IndicatorSmoother();
     this.build();
     this.render();
-    store.addEventListener("change", () => this.scheduleRender());
+    store.addEventListener("change", () => {
+      this.scheduleRender();
+      this.scheduleIndicatorAnimation();
+    });
     this.resizeObserver = new ResizeObserver(() => this.refreshGeometry());
     this.resizeObserver.observe(layer);
     this.refreshGeometry();
   }
 
   loadLayout() {
-    try {
-      const saved = JSON.parse(this.storage.getItem(STORAGE_KEY) || "null");
-      if (saved?.layout) return { layout: normalizeLayout(saved.layout), activeLayout: saved.activeLayout || "custom" };
-    } catch {}
-    try {
-      const legacy = JSON.parse(this.storage.getItem(LEGACY_KEY) || "null");
-      if (legacy) {
-        const migrated = createPresetLayout("classic");
-        for (const widget of WIDGETS) {
-          if (!legacy[widget.id]) migrated[widget.id].hidden = true;
-          else migrated[widget.id] = { ...migrated[widget.id], ...legacy[widget.id] };
-        }
-        return { layout: migrated, activeLayout: "custom" };
+    const saved = readStored(this.storage, STORAGE_KEY, null, (value) => {
+      if (!value || (value.version !== undefined && value.version !== 2) || !isLayout(value.layout)) return null;
+      const active = typeof value.activeLayout === "string" ? value.activeLayout : "custom";
+      const activeLayout = Object.hasOwn(BUILT_IN_LAYOUTS, active) || active === "custom" ||
+        (active.startsWith("saved:") && active.slice(6) && sanitizeLayoutName(active.slice(6)) === active.slice(6)) ? active : "custom";
+      return { version: 2, activeLayout, layout: normalizeLayout(value.layout, Object.hasOwn(BUILT_IN_LAYOUTS, activeLayout) ? activeLayout : "classic") };
+    });
+    if (saved) return saved;
+    const legacy = readStored(this.storage, LEGACY_KEY, null, (value) => isLayout(value) ? value : null);
+    if (legacy) {
+      const migrated = createPresetLayout("classic");
+      for (const widget of WIDGETS) {
+        if (!legacy[widget.id]) migrated[widget.id].hidden = true;
+        else migrated[widget.id] = { ...migrated[widget.id], ...legacy[widget.id] };
       }
-    } catch {}
+      const record = { version: 2, layout: normalizeLayout(migrated), activeLayout: "custom" };
+      writeStored(this.storage, STORAGE_KEY, record);
+      // Keep the old record if migration could not be persisted.
+      try { if (this.storage?.getItem(STORAGE_KEY) === JSON.stringify(record)) removeStored(this.storage, LEGACY_KEY); } catch {}
+      return record;
+    }
     return { layout: createPresetLayout("classic"), activeLayout: "classic" };
   }
 
   save() {
-    this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, activeLayout: this.activeLayout, layout: this.layout }));
+    writeStored(this.storage, STORAGE_KEY, { version: 2, activeLayout: this.activeLayout, layout: this.layout });
   }
 
   build() {
@@ -96,16 +109,21 @@ export class WidgetManager extends EventTarget {
     if (this.geometryMetric !== undefined && this.geometryMetric !== this.store.state.isMetric) { this.refreshGeometry(); return; }
     this.lastRender = performance.now();
     this.layer.dataset.units = this.store.state.isMetric ? "metric" : "imperial";
+    const display = this.indicators?.sample(this.store.state, performance.now());
     for (const definition of WIDGETS) {
-      this.applyLayout(definition.id);
+      this.updateVisibility(definition.id);
       const element = this.elements.get(definition.id);
       if (element?.hidden) continue;
       const surface = element?.querySelector(".widget-surface");
       if (!surface) continue;
-      const html = definition.render(this.store.state);
-      if (surface.__renderedHtml !== html) {
-        surface.innerHTML = html;
-        surface.__renderedHtml = html;
+      const state = display && ["torque", "confidence"].includes(definition.id)
+        ? { ...this.store.state, ...display } : this.store.state;
+      if (!paintIndicator(surface, definition.id, state)) {
+        const html = definition.render(state);
+        if (surface.__renderedHtml !== html) {
+          surface.innerHTML = html;
+          surface.__renderedHtml = html;
+        }
       }
       const collapsed = this.collapsed.has(definition.id);
       element.classList.toggle("collapsed", collapsed);
@@ -116,6 +134,34 @@ export class WidgetManager extends EventTarget {
         button.querySelector("span").textContent = collapsed ? " ▸" : " ▾";
       }
     }
+    if (display?.pending) this.scheduleIndicatorAnimation();
+  }
+
+  scheduleIndicatorAnimation() {
+    if (!this.indicators || this.suspended || this.displayMode === "camera" || this.indicatorFrame) return;
+    if (!["torque", "confidence"].some((id) => {
+      const element = this.elements.get(id);
+      return element && !element.hidden;
+    })) return;
+    this.indicatorFrame = requestAnimationFrame((now) => {
+      this.indicatorFrame = null;
+      if (this.suspended || this.displayMode === "camera") return;
+      // Only these two small SVGs animate at 30 fps; graphs/readouts keep their
+      // lower paint rate. Do not redraw the camera or projection overlay here.
+      if (now - (this.lastIndicatorPaint ?? -Infinity) < 32) {
+        this.scheduleIndicatorAnimation();
+        return;
+      }
+      this.lastIndicatorPaint = now;
+      const display = this.indicators.sample(this.store.state, now);
+      for (const id of ["torque", "confidence"]) {
+        const element = this.elements.get(id);
+        if (!element || element.hidden) continue;
+        const surface = element.querySelector(".widget-surface");
+        if (surface) paintIndicator(surface, id, { ...this.store.state, ...display });
+      }
+      if (display.pending) this.scheduleIndicatorAnimation();
+    });
   }
 
   scheduleRender() {
@@ -125,10 +171,13 @@ export class WidgetManager extends EventTarget {
   }
 
   setDisplayMode(mode, suspended = false) {
+    if (this.indicatorFrame) cancelAnimationFrame(this.indicatorFrame);
+    this.indicatorFrame = null;
+    this.indicators?.pause();
     this.displayMode = mode;
     this.suspended = suspended;
     this.refreshGeometry();
-    this.render();
+    this.scheduleIndicatorAnimation();
   }
 
   refreshGeometry() {
@@ -162,6 +211,7 @@ export class WidgetManager extends EventTarget {
     this.layer.classList.toggle("editing", this.editing);
     for (const element of this.elements.values()) element.tabIndex = this.editing ? 0 : -1;
     this.dispatchEvent(new CustomEvent("editing", { detail: this.editing }));
+    this.render();
   }
 
   setVisible(id, visible) {
@@ -179,6 +229,7 @@ export class WidgetManager extends EventTarget {
     this.activeLayout = id;
     this.applyAll();
     this.save();
+    if (this.editing) { this.setEditing(true); this.render(); }
     this.emitLayoutChange();
     return true;
   }
@@ -188,20 +239,19 @@ export class WidgetManager extends EventTarget {
   }
 
   namedLayouts() {
-    try {
-      const saved = JSON.parse(this.storage.getItem(NAMED_KEY) || "{}");
-      return saved && typeof saved === "object" ? saved : {};
-    } catch {
-      return {};
-    }
+    return readStored(this.storage, NAMED_KEY, {}, (saved) => {
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+      return Object.fromEntries(Object.entries(saved).filter(([name, layout]) =>
+        name && sanitizeLayoutName(name) === name && isLayout(layout)).map(([name, layout]) => [name, normalizeLayout(layout)]));
+    });
   }
 
   saveNamed(rawName) {
     const name = sanitizeLayoutName(rawName);
     if (!name) return null;
     const layouts = this.namedLayouts();
-    layouts[name] = normalizeLayout(this.displayMode === "full" ? this.presentedLayout || this.layout : this.layout);
-    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    Object.defineProperty(layouts, name, { value: normalizeLayout(this.displayMode === "full" ? this.presentedLayout || this.layout : this.layout), enumerable: true, configurable: true, writable: true });
+    writeStored(this.storage, NAMED_KEY, layouts);
     this.activeLayout = `saved:${name}`;
     this.save();
     this.emitLayoutChange();
@@ -209,7 +259,8 @@ export class WidgetManager extends EventTarget {
   }
 
   applyNamed(name) {
-    const saved = this.namedLayouts()[name];
+    const layouts = this.namedLayouts();
+    const saved = Object.hasOwn(layouts, name) ? layouts[name] : null;
     if (!saved) return false;
     this.layout = normalizeLayout(saved);
     this.activeLayout = `saved:${name}`;
@@ -221,9 +272,9 @@ export class WidgetManager extends EventTarget {
 
   deleteNamed(name) {
     const layouts = this.namedLayouts();
-    if (!layouts[name]) return false;
+    if (!Object.hasOwn(layouts, name)) return false;
     delete layouts[name];
-    this.storage.setItem(NAMED_KEY, JSON.stringify(layouts));
+    writeStored(this.storage, NAMED_KEY, layouts);
     if (this.activeLayout === `saved:${name}`) this.activeLayout = "custom";
     this.save();
     this.emitLayoutChange();
@@ -253,15 +304,7 @@ export class WidgetManager extends EventTarget {
     element.style.setProperty("--y", layout.y);
     element.style.setProperty("--w", layout.w);
     element.style.setProperty("--h", layout.h);
-    const state = this.store.state;
-    const autoHide = this.displayMode === "full" && !this.editing && BUILT_IN_LAYOUTS[this.activeLayout];
-    element.hidden = this.displayMode === "camera" || Boolean(layout.hidden)
-      || (autoHide && id === "roadName" && (!state.roadNameToggle || !state.roadName))
-      || (autoHide && id === "driver" && (!state.started || !state.dmSeen))
-      || (autoHide && id === "confidence" && !state.started)
-      || (autoHide && id === "speedLimit" && ((state.paramsSeen && state.speedLimitMode === 0) || !state.speedLimitSeen))
-      || (autoHide && id === "cruise" && (state.vCruiseCluster || state.vCruiseDeprecated) === -1)
-      || (autoHide && id === "turnSignals" && !state.showTurnSignals);
+    this.updateVisibility(id);
     // Fit custom text against its own widget, instead of the whole screen.
     const { width, height } = this.bounds || this.layer.getBoundingClientRect();
     const reference = { detailedSteering: [112,115], detailedDriver: [112,46], detailedLongitudinal: [112,97], detailedLead: [112,73], steering:[100,68], lead:[100,68], deviceHealth:[82,34] }[id];
@@ -271,8 +314,23 @@ export class WidgetManager extends EventTarget {
     }
   }
 
+  updateVisibility(id) {
+    const element = this.elements.get(id);
+    const layout = this.displayMode === "full" && this.editing ? this.layout[id] : (this.presentedLayout || this.layout)[id];
+    if (!element || !layout) return;
+    const state = this.store.state;
+    const autoHide = this.displayMode === "full" && !this.editing && BUILT_IN_LAYOUTS[this.activeLayout];
+    element.hidden = this.displayMode === "camera" || Boolean(layout.hidden)
+      || (autoHide && id === "roadName" && (!state.roadNameToggle || !state.roadName))
+      || (autoHide && id === "driver" && (!state.started || !state.dmSeen))
+      || (autoHide && id === "confidence" && !state.started)
+      || (autoHide && id === "speedLimit" && ((state.paramsSeen && state.speedLimitMode === 0) || !state.speedLimitSeen))
+      || (autoHide && id === "cruise" && (state.vCruiseCluster || state.vCruiseDeprecated) === -1)
+      || (autoHide && id === "turnSignals" && !state.showTurnSignals);
+  }
+
   markCustom() {
-    if (BUILT_IN_LAYOUTS[this.activeLayout] && this.presentedLayout && this.displayMode === "full") this.layout = structuredClone(this.presentedLayout);
+    if (!this.editing && BUILT_IN_LAYOUTS[this.activeLayout] && this.presentedLayout && this.displayMode === "full") this.layout = structuredClone(this.presentedLayout);
     this.activeLayout = "custom";
     this.presentedLayout = this.layout;
     this.layer.dataset.layout = "custom";
@@ -326,6 +384,11 @@ export class WidgetManager extends EventTarget {
     target.addEventListener("pointerup", end);
     target.addEventListener("pointercancel", end);
   }
+}
+
+function isLayout(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && WIDGETS.some(({ id }) =>
+    Object.hasOwn(value, id) && value[id] && typeof value[id] === "object" && !Array.isArray(value[id]));
 }
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));

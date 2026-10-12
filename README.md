@@ -2,7 +2,9 @@
 
 OP WebView is an installable, local-first web client for the openpilot `webrtcd` stream. It receives the road camera over WebRTC, consumes cereal telemetry on the WebRTC data channel, and projects the path, lane lines, road edges, and lead indicators in the browser.
 
-This first milestone includes:
+This is a supplemental viewer, not a driving controller or replacement for the comma display. Set up and test it while parked.
+
+Features:
 
 - WebRTC road-camera streaming with H.264 preference
 - Telemetry parsing for the stock on-road UI services
@@ -16,26 +18,32 @@ This first milestone includes:
 - A no-hardware demo mode for validating the layout and renderer
 - A GitHub Pages deployment workflow
 
+Use [stable](https://inertiaimpact.github.io/OPWebView/) for released features or [dev](https://inertiaimpact.github.io/OPWebView/dev/) for testing future changes. Stable now includes automatic discovery/reconnection, floating device controls, collapsible overlay editing menus, double-tap fullscreen, safe saved-data migration, rendering optimizations and stale-telemetry warnings.
+
 The presets use OPView's reference sizing rather than stretching corner widgets with the window. Detailed includes live ten-second acceleration graphs and folding panels. Small page windows temporarily show speed and torque only; standard video Picture-in-Picture stays camera-only. The full chosen layout restores on return. See [the visual/resize verification notes](docs/hud-visual-pass.md) for reference details, test coverage and Android limitations.
 
 ## Run locally
 
-No dependencies or build step are required.
+Use Node.js 24 (the CI version). No build step or dependency installation is required to run the checked-in app; the QR library is vendored.
 
 ```powershell
-npm test
+npm run check
 npm run serve
 ```
 
-Open `http://127.0.0.1:4173`. Use **Demo** to exercise the renderer, or **Connect** and enter the comma device's local IP or hostname.
+Open `http://127.0.0.1:4173`. Discovery starts automatically; saved reachable devices connect immediately, while a newly found device gets a five-second delay. Use **+ Add IP address** if discovery misses it, or **Demo** without hardware. Long-press the dashboard to edit; **Done** locks it. Double-tap the live view or demo to enter/exit fullscreen. See [startup and controls](docs/startup-connection.md) for limitations.
+
+Once connected, the device panel and launcher disappear. Reopen **Devices / logs** from the editing Views panel for diagnostics, including copyable JSON and a compact QR report. The QR contains recent diagnostic events, not the entire log.
 
 ## Device requirements
 
-The comma device must be on the same network and expose `webrtcd` on port 5001. Current stock openpilot needs its streaming processes enabled on-road, its listener exposed to the LAN, and browser CORS handling. The checked `gerrylum/openpilot` `rx-wb` branch already supplies the streaming and LAN changes, but still needs the included CORS-only patch. Apply the version-specific compatibility change described in [docs/device-setup.md](docs/device-setup.md) before using the GitHub Pages build.
+The comma must be on the same network, on-road with OPView streaming enabled, and expose browser-readable `webrtcd` on port 5001. The checked `gerrylum/openpilot` **rx-wb-stg** revision includes browser CORS support; do not reapply the older rx-wb patch to it. Other revisions/forks may need compatibility changes. See [device setup](docs/device-setup.md) and the [pinned telemetry comparison](docs/rx-wb-stg-telemetry.md).
 
-Chrome 142 and newer can grant an HTTPS page access to HTTP devices on the local network. Other browsers may still block the HTTPS-to-local-HTTP SDP request. The WebRTC media and data channel remain peer-to-peer; GitHub Pages only serves the cached application code.
+Current Chrome/Chromium is the primary target. Allow local-network access when prompted; permission alone does not bypass device CORS requirements. Other browsers may block HTTPS-to-local-HTTP signaling. Video and telemetry remain peer-to-peer; GitHub Pages serves only the application files.
 
-Normal web pages cannot enumerate mDNS/DNS-SD services. OP WebView therefore preserves discovery through pluggable browser-safe providers: recently connected devices, a known `comma.local` hostname, and manual pairing. A future local discovery helper can be added behind the same interface without changing connection or UI code.
+Web pages cannot enumerate Bonjour services. Discovery probes saved addresses and `comma.local`, with a bounded private-subnet fallback where an address is known. Browsers may hide the local subnet, so manual IP entry remains necessary on some networks.
+
+After a successful online visit/cache installation, install the page as a PWA for offline launch. Offline use still needs a reachable comma on the local network. Updates preserve compatible saved settings and replace the cached app only after a complete release is available; do not routinely clear site data. See [stored-data handling](docs/stored-data.md).
 
 ## GitHub Pages
 
@@ -43,9 +51,9 @@ The repository includes `.github/workflows/pages.yml`. In the repository setting
 
 1. Open **Settings → Pages**.
 2. Set **Source** to **GitHub Actions**.
-3. Push to `main` or run the workflow manually.
+3. Push to `main` or `dev`, or run the workflow manually.
 
-The action tests the JavaScript and deploys the contents of `public/`. All runtime URLs are relative, so the app works at the project path `https://inertiaimpact.github.io/OPWebView/` as well as on a custom domain.
+The action checks out and tests **both branches**, then deploys one combined artifact: main at `/OPWebView/` and dev at `/OPWebView/dev/`. It uses Node 24 on Ubuntu 24.04. Do not deploy either branch alone, because Pages replaces the whole site. See [deployment and promotion](docs/development-site.md).
 
 GitHub Pages is an appropriate host because this application is entirely static. Camera video and telemetry do not transit GitHub. The one compatibility dependency is the local device's browser-facing CORS response described above.
 

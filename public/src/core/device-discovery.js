@@ -1,4 +1,5 @@
 import { storageKey } from "./app-channel.js";
+import { browserStorage, readStored, writeStored } from "./storage.js";
 const STORAGE_KEY = storageKey("opwebview.devices.v1");
 const DEFAULT_CANDIDATES = ["comma.local"];
 const SUBNET_SCAN_CONCURRENCY = 28;
@@ -31,18 +32,13 @@ export function deviceBaseUrl(device) {
 }
 
 export class DeviceDiscovery extends EventTarget {
-  constructor(storage = globalThis.localStorage) {
+  constructor(storage = browserStorage()) {
     super();
     this.storage = storage;
   }
 
   saved() {
-    try {
-      const items = JSON.parse(this.storage.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(items) ? items.filter((item) => item?.host && item?.authority) : [];
-    } catch {
-      return [];
-    }
+    return readStored(this.storage, STORAGE_KEY, [], normalizeSavedDevices);
   }
 
   remember(input, displayName) {
@@ -51,18 +47,18 @@ export class DeviceDiscovery extends EventTarget {
       { ...device, displayName: displayName || device.label, lastConnected: Date.now() },
       ...this.saved().filter((item) => item.authority !== device.authority)
     ].slice(0, 8);
-    this.storage.setItem(STORAGE_KEY, JSON.stringify(next));
+    writeStored(this.storage, STORAGE_KEY, next);
     this.dispatchEvent(new CustomEvent("devices", { detail: next }));
     return next[0];
   }
 
   forget(authority) {
     const next = this.saved().filter((device) => device.authority !== authority);
-    this.storage.setItem(STORAGE_KEY, JSON.stringify(next));
+    writeStored(this.storage, STORAGE_KEY, next);
     this.dispatchEvent(new CustomEvent("devices", { detail: next }));
   }
 
-  async scan() {
+  async scan({ signal, onReachable = () => {}, initialTimeoutMs = 2400 } = {}) {
     const candidates = new Map();
     for (const device of this.saved()) candidates.set(device.authority, device);
     for (const host of DEFAULT_CANDIDATES) {
@@ -72,19 +68,26 @@ export class DeviceDiscovery extends EventTarget {
 
     this.dispatchEvent(new CustomEvent("scanstart"));
     this.dispatchEvent(new CustomEvent("scanprogress", { detail: "Checking saved addresses…" }));
-    const results = await Promise.all([...candidates.values()].map(async (device) => ({
-      ...device,
-      reachable: await this.probe(device)
-    })));
+    const results = await Promise.all([...candidates.values()].map(async (device) => {
+      const result = { ...device, reachable: await this.probe(device, initialTimeoutMs, signal) };
+      if (result.reachable && !signal?.aborted) {
+        this.dispatchEvent(new CustomEvent("devicefound", { detail: result }));
+        onReachable(result);
+      }
+      return result;
+    }));
 
-    if (!results.some((device) => device.reachable)) {
+    if (!signal?.aborted && !results.some((device) => device.reachable)) {
       const prefixes = new Set(this.saved().map((device) => privateSubnetPrefix(device.host)).filter(Boolean));
       for (const prefix of await discoverLocalSubnetPrefixes()) prefixes.add(prefix);
       for (const prefix of [...prefixes].slice(0, 3)) {
+        if (signal?.aborted) break;
         this.dispatchEvent(new CustomEvent("scanprogress", { detail: `Scanning ${prefix}.x…` }));
-        const found = await this.scanSubnet(prefix, candidates);
+        const found = await this.scanSubnet(prefix, candidates, signal);
         if (found) {
           results.push({ ...found, reachable: true });
+          this.dispatchEvent(new CustomEvent("devicefound", { detail: { ...found, reachable: true } }));
+          onReachable({ ...found, reachable: true });
           break;
         }
       }
@@ -95,23 +98,28 @@ export class DeviceDiscovery extends EventTarget {
     return results;
   }
 
-  async probe(device, timeoutMs = 2400) {
+  async probe(device, timeoutMs = 2400, signal) {
+    if (signal?.aborted) return false;
     try {
       const options = {
         method: "GET",
-        mode: "no-cors",
+        mode: "cors",
         cache: "no-store",
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs)
       };
       options.targetAddressSpace = "local";
-      await fetch(`${deviceBaseUrl(device)}/schema?services=deviceState`, options);
-      return true;
+      const response = await fetch(`${deviceBaseUrl(device)}/schema?services=deviceState`, options);
+      // Only auto-connect to a positively identified comma service, never a
+      // random HTTP server or opaque no-CORS response discovered on port 5001.
+      if (!response.ok) return false;
+      const schema = await response.json();
+      return Boolean(schema?.deviceState && typeof schema.deviceState === "object");
     } catch {
       return false;
     }
   }
 
-  async scanSubnet(prefix, existing) {
+  async scanSubnet(prefix, existing, signal) {
     const queue = subnetHosts(prefix)
       .map((host) => normalizeHost(host))
       .filter((device) => !existing.has(device.authority));
@@ -119,9 +127,9 @@ export class DeviceDiscovery extends EventTarget {
     let found = null;
 
     const worker = async () => {
-      while (!found && cursor < queue.length) {
+      while (!found && !signal?.aborted && cursor < queue.length) {
         const device = queue[cursor++];
-        if (await this.probe(device, 1300)) {
+        if (await this.probe(device, 1300, signal) && !found && !signal?.aborted) {
           found = { ...device, displayName: `comma (${device.host})` };
         }
       }
@@ -129,6 +137,36 @@ export class DeviceDiscovery extends EventTarget {
     await Promise.all(Array.from({ length: Math.min(SUBNET_SCAN_CONCURRENCY, queue.length) }, worker));
     return found;
   }
+}
+
+export function normalizeSavedDevices(items) {
+  if (!Array.isArray(items)) return null;
+  const result = [];
+  const seen = new Set();
+  for (const item of items) {
+    try {
+      let input;
+      if (typeof item === "string") input = item;
+      else if (item && typeof item === "object" && !Array.isArray(item)) {
+        const protocol = item.protocol ?? "http";
+        if (!["http", "https"].includes(protocol)) continue;
+        const address = item.authority || (typeof item.host === "string" &&
+          `${item.host}${item.port ? `:${item.port}` : ""}`);
+        if (typeof address !== "string" || !address || address.includes("://")) continue;
+        input = `${protocol}://${address}`;
+      } else continue;
+      const device = normalizeHost(input);
+      if (seen.has(device.authority)) continue;
+      seen.add(device.authority);
+      const label = typeof item.label === "string" ? item.label.slice(0, 100) : device.label;
+      const displayName = typeof item.displayName === "string" ? item.displayName.slice(0, 100) : label;
+      const lastConnected = Number(item.lastConnected);
+      result.push({ ...device, label, displayName,
+        lastConnected: Number.isFinite(lastConnected) && lastConnected > 0 ? Math.min(lastConnected, Date.now()) : 0 });
+      if (result.length === 8) break;
+    } catch { /* Drop only this malformed device, keeping other saved devices. */ }
+  }
+  return result;
 }
 
 export function privateSubnetPrefix(host) {

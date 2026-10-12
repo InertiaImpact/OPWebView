@@ -13,6 +13,17 @@ const CLIP_MARGIN = 500;
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const leadPresent = (lead) => Boolean(lead && (lead.status === true || lead.present === true));
+const sameInputs = (a, b) => a?.length === b.length && b.every((value, index) => Object.is(value, a[index]));
+
+export function overlayInputs(state) {
+  return [state, state.pathX, state.pathY, state.pathZ,
+    ...state.laneLineX, ...state.laneLineY, ...state.laneLineZ, state.laneLineProbs,
+    ...state.roadEdgeX, ...state.roadEdgeY, ...state.roadEdgeZ, state.roadEdgeStds,
+    state.accelerationX, state.rpyCalib, state.wideFromDeviceEuler, state.calStatus,
+    state.calibHeight, state.leadOne, state.leadTwo, state.allowThrottle,
+    state.status, state.experimentalMode, state.isMetric, state.deviceType,
+    state.sensor, state.streamType, state.hudLayout];
+}
 
 export class OverlayRenderer {
   constructor(canvas, store, video = null) {
@@ -29,6 +40,7 @@ export class OverlayRenderer {
     this.resizeObserver.observe(canvas);
     this.schedule = () => {
       if (this.pending || this.suspended) return;
+      if (sameInputs(this.lastInputs, overlayInputs(this.store.state))) return;
       this.pending = requestAnimationFrame(() => { this.pending = null; this.render(); });
     };
     store.addEventListener("change", this.schedule);
@@ -55,21 +67,28 @@ export class OverlayRenderer {
   }
 
   setPresentation(mode, suspended) {
+    if (this.presentation === mode && this.suspended === suspended) return;
     this.presentation = mode;
     this.suspended = suspended;
+    if (this.pending) cancelAnimationFrame(this.pending);
+    this.pending = null;
     if (suspended || mode !== "full") this.clear();
     else this.render();
   }
 
   render() {
-    this.clear();
     if (!this.width || !this.height) return;
     const state = this.store.state;
+    this.lastInputs = overlayInputs(state);
     const frame = calculateFrameTransform(state, this.width, this.height);
     if (this.video) {
-      for (const [key, value] of Object.entries({ left: frame.left, top: frame.top, width: frame.width, height: frame.height })) this.video.style[key] = `${value}px`;
+      for (const [key, value] of Object.entries({ left: frame.left, top: frame.top, width: frame.width, height: frame.height })) {
+        const css = `${value}px`;
+        if (this.video.style[key] !== css) this.video.style[key] = css;
+      }
     }
     if (this.suspended || this.presentation !== "full") return;
+    this.clear();
     if (!state.pathX.length) return;
 
     const context = this.context;

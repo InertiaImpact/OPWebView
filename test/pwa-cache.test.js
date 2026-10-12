@@ -2,6 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+test("every statically imported app module is included in the atomic offline release", async () => {
+  const root = new URL("../public/", import.meta.url);
+  const worker = await readFile(new URL("service-worker.js", root), "utf8");
+  const shell = worker.match(/const APP_SHELL = \[([\s\S]*?)\];/)[1];
+  const base = "https://offline.test/";
+  const cached = new Set([...shell.matchAll(/"([^"]+)"/g)].map((match) => new URL(match[1], base).href));
+  const pending = [new URL("./src/app.js?v=20", base)];
+  const visited = new Set();
+  while (pending.length) {
+    const url = pending.pop();
+    if (visited.has(url.href)) continue;
+    visited.add(url.href);
+    assert.ok(cached.has(url.href), `${url.pathname}${url.search} must be cached for offline use`);
+    const source = await readFile(new URL(url.pathname.slice(1), root), "utf8");
+    for (const match of source.matchAll(/(?:^|\n)import[\s\S]*?from\s+"([^"]+)"/g)) pending.push(new URL(match[1], url));
+  }
+});
+
 test("the page and offline shell use the current versioned application modules", async () => {
   const [index, app, worker] = await Promise.all([
     readFile(new URL("../public/index.html", import.meta.url), "utf8"),
@@ -9,11 +27,12 @@ test("the page and offline shell use the current versioned application modules",
     readFile(new URL("../public/service-worker.js", import.meta.url), "utf8")
   ]);
 
-  assert.match(index, /src\/app\.js\?v=12/);
-  assert.match(worker, /src\/app\.js\?v=12/);
+  assert.match(index, /src\/app\.js\?v=20/);
+  assert.match(worker, /src\/app\.js\?v=20/);
   assert.match(app, /core\/webrtc-transport\.js\?v=4/);
   assert.match(worker, /core\/webrtc-transport\.js\?v=4/);
-  assert.match(worker, /const CACHE_VERSION = 22/);
+  assert.match(worker, /const CACHE_VERSION = 23/);
+  assert.match(worker, /widgets\/indicator-smoothing\.js/);
   assert.match(app, /core\/device-discovery\.js\?v=2/);
   assert.match(worker, /core\/device-discovery\.js\?v=2/);
   assert.match(app, /core\/connection-manager\.js\?v=2/);

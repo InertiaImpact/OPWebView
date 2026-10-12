@@ -8,70 +8,67 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
     <title>OP WebView</title>
   </head>
   <body>
     <main id="app" class="app" data-status="disconnected">
+      <aside id="device-panel" class="floating-panel device-panel" aria-label="Comma devices">
+        <header class="dock-header">
+          <button id="controls-toggle" class="device-panel-toggle" type="button" aria-label="Collapse devices" aria-expanded="true" aria-controls="device-panel">
+            <svg class="device-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="11" height="14" rx="2"/><path d="M7 17h3M16 3a8 8 0 0 1 6 7M16 7a4 4 0 0 1 2.5 3"/></svg>
+            <span>Devices</span><span class="device-toggle-chevron" aria-hidden="true">▴</span>
+          </button>
+          <span id="connection-pill" class="connection-pill">Offline</span>
+        </header>
+        <div id="startup-status" hidden aria-label="Automatic device connection">
+          <span id="startup-message" role="status" aria-live="polite"></span>
+          <button id="startup-cancel" type="button" hidden>Cancel</button>
+        </div>
+        <div id="device-list" class="device-list" aria-live="polite"></div>
+        <p id="connection-error" class="form-error" role="alert" hidden></p>
+        <div class="dock-actions">
+          <button id="discover-button" type="button">Scan network</button>
+          <button id="demo-button" type="button" aria-pressed="false">Demo</button>
+        </div>
+        <button id="connect-button" class="add-device-button" type="button" aria-label="Add comma by IP address">+ <span>Add IP address</span></button>
+        <details class="device-tools"><summary>Tools</summary><div class="dock-actions">
+          <button id="diagnostics-button" type="button">Logs</button>
+          <button id="fullscreen-button" type="button" aria-label="Toggle fullscreen">⛶ Fullscreen</button>
+          <button id="install-button" type="button" hidden>Install</button>
+        </div></details>
+        <p class="gesture-hint">Long-press the view to edit widgets</p>
+      </aside>
       <section class="viewport" aria-label="openpilot road view">
         <div class="video-backdrop" aria-hidden="true"></div>
         <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
         <canvas id="model-overlay" aria-label="Telemetry overlay"></canvas>
         <div id="engagement-frame" class="engagement-frame" aria-hidden="true"></div>
 
-        <button id="controls-toggle" class="controls-toggle" type="button" aria-label="Show viewer controls" aria-expanded="false" aria-controls="viewer-topbar">⋯</button>
-        <div class="topbar" id="viewer-topbar">
-          <div class="brand-lockup">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span class="brand-name">OP WebView</span>
-            <span id="connection-pill" class="connection-pill">Offline</span>
-          </div>
-          <div class="toolbar" aria-label="Viewer controls">
-            <button id="connect-button" class="icon-button" type="button" title="Connect to a device" aria-label="Connect to a device">
-              <span aria-hidden="true">⌁</span><span class="button-label">Connect</span>
-            </button>
-            <button id="demo-button" class="icon-button" type="button" title="Toggle demo mode" aria-pressed="false">
-              <span aria-hidden="true">▶</span><span class="button-label">Demo</span>
-            </button>
-            <button id="edit-button" class="icon-button" type="button" title="Unlock widget layout" aria-pressed="false">
-              <span id="edit-icon" aria-hidden="true">🔒</span><span id="edit-label" class="button-label">Unlock</span>
-            </button>
-            <button id="layout-button" class="icon-button" type="button" title="Choose a dashboard layout">
-              <span aria-hidden="true">▦</span><span id="layout-label" class="button-label">Classic</span>
-            </button>
-            <button id="install-button" class="icon-button" type="button" title="Install OP WebView" hidden>
-              <span aria-hidden="true">↓</span><span class="button-label">Install</span>
-            </button>
-            <button id="diagnostics-button" class="icon-button" type="button" title="View diagnostic log">
-              <span aria-hidden="true">ⓘ</span><span class="button-label">Logs</span>
-            </button>
-            <button id="fullscreen-button" class="icon-button compact" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">⛶</button>
-          </div>
-        </div>
-
         <section id="widget-layer" class="widget-layer" aria-label="Dashboard widgets"></section>
+        <p id="stream-health" class="stream-health" role="status" aria-live="polite" hidden></p>
 
         <section id="alert-banner" class="alert-banner" aria-live="assertive" hidden>
           <strong id="alert-title"></strong>
           <span id="alert-detail"></span>
         </section>
 
-        <section id="empty-state" class="empty-state">
-          <span class="eyebrow">LOCAL CAMERA + TELEMETRY</span>
-          <h1>Your drive view,<br />in the browser.</h1>
-          <p>Connect to a comma device on this network, or preview the renderer in demo mode.</p>
-          <div class="empty-actions">
-            <button id="empty-connect" class="primary-button" type="button">Connect device</button>
-            <button id="empty-demo" class="secondary-button" type="button">View demo</button>
+        <aside id="edit-tray" class="floating-panel view-panel" hidden aria-label="Views and layout tools">
+          <header class="dock-header"><span>Views</span><span id="layout-label">Classic</span><button class="panel-collapse" type="button" aria-label="Collapse views" aria-expanded="true">−</button></header>
+          <div id="layout-presets" class="layout-presets"></div>
+          <div class="section-heading"><span>Saved views</span></div>
+          <div id="saved-layouts" class="saved-layouts"></div>
+          <div class="save-layout-row">
+            <input id="layout-name" maxlength="40" autocomplete="off" placeholder="Name this view" aria-label="Layout name" />
+            <button id="save-layout-button" type="button">Save</button>
           </div>
-        </section>
-
-        <aside id="edit-tray" class="edit-tray" hidden aria-label="Widget layout tools">
-          <span>Layout unlocked</span>
-          <button id="widgets-button" type="button">Widgets</button>
-          <button id="edit-layouts-button" type="button">Layouts</button>
-          <button id="reset-layout-button" type="button">Reset</button>
+          <button id="reset-layout-button" type="button">Reset current view</button>
+          <button id="editing-devices-button" type="button">Devices / logs</button>
           <button id="done-editing-button" type="button">Done</button>
+        </aside>
+        <aside id="widget-panel" class="floating-panel widget-panel" hidden aria-label="Visible widgets">
+          <header class="dock-header"><span>Widgets</span><button class="panel-collapse" type="button" aria-label="Collapse widgets" aria-expanded="true">−</button></header>
+          <div id="widget-toggles" class="widget-toggles"></div>
         </aside>
       </section>
     </main>
@@ -80,8 +77,8 @@
       <form id="connection-form" method="dialog">
         <header class="dialog-header">
           <div>
-            <span class="eyebrow">DEVICE CONNECTION</span>
-            <h2>Find your comma</h2>
+            <span class="eyebrow">MANUAL CONNECTION</span>
+            <h2>Add a comma</h2>
           </div>
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
@@ -93,52 +90,12 @@
           <input id="device-host" name="host" inputmode="url" autocomplete="url" placeholder="192.168.0.10 or comma.local" required />
           <button id="connect-submit" class="primary-button" value="default" type="submit">Connect</button>
         </div>
-        <p id="connection-error" class="form-error" role="alert" hidden></p>
         <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">View diagnostic log + QR</button>
-
-        <div class="section-heading">
-          <span>Discovered &amp; saved</span>
-          <button id="discover-button" type="button" class="text-button">Scan network</button>
-        </div>
-        <div id="device-list" class="device-list" aria-live="polite"></div>
 
         <details class="compatibility-note">
           <summary>Browser connection requirements</summary>
           <p>Chrome will request local-network access. The comma must be onroad with OPView enabled so <code>webrtcd</code> is running. The endpoint must also allow this page’s origin with CORS.</p>
         </details>
-      </form>
-    </dialog>
-
-    <dialog id="layout-dialog" class="panel-dialog layout-dialog">
-      <form method="dialog">
-        <header class="dialog-header">
-          <div>
-            <span class="eyebrow">DASHBOARD</span>
-            <h2>Layouts</h2>
-          </div>
-          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
-        </header>
-        <p class="dialog-copy">Recall an OPView layout or save the current widget arrangement on this device.</p>
-        <div id="layout-presets" class="layout-presets"></div>
-        <div class="section-heading"><span>Saved layouts</span></div>
-        <div id="saved-layouts" class="saved-layouts"></div>
-        <div class="save-layout-row">
-          <input id="layout-name" maxlength="40" autocomplete="off" placeholder="My driving layout" aria-label="Layout name" />
-          <button id="save-layout-button" class="primary-button" type="button">Save current</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="widget-dialog" class="panel-dialog small-dialog">
-      <form method="dialog">
-        <header class="dialog-header">
-          <div>
-            <span class="eyebrow">LAYOUT</span>
-            <h2>Visible widgets</h2>
-          </div>
-          <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
-        </header>
-        <div id="widget-toggles" class="widget-toggles"></div>
       </form>
     </dialog>
 
@@ -174,6 +131,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=12"></script>
+    <script type="module" src="./src/app.js?v=20"></script>
   </body>
 </html>

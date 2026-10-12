@@ -1,22 +1,34 @@
 import { applyTelemetry } from "./state.js?v=3";
+export const MAX_TELEMETRY_BUFFER = 1024 * 1024;
 
 export class CerealAdapter {
-  constructor(store) {
+  constructor(store, { maxBuffer = MAX_TELEMETRY_BUFFER, onDiscard = () => {} } = {}) {
     this.store = store;
     this.buffer = "";
+    this.maxBuffer = maxBuffer;
+    this.onDiscard = onDiscard;
+    this.lastAppliedTypes = new Set();
   }
 
   apply(chunk) {
-    this.buffer += String(chunk ?? "");
+    this.lastAppliedTypes.clear();
+    const text = String(chunk ?? "");
+    if (this.buffer.length + text.length > this.maxBuffer) {
+      this.buffer = "";
+      this.onDiscard("Telemetry buffer limit exceeded; incomplete data discarded");
+      if (text.length > this.maxBuffer) return 0;
+    }
+    this.buffer += text;
     const { objects, remainder } = extractJsonObjects(this.buffer);
     this.buffer = remainder;
     let applied = 0;
 
     for (const raw of objects) {
       try {
-        const message = JSON.parse(raw.replace(/\bNaN\b/g, "null"));
+        const message = parseTelemetryJson(raw);
         if (typeof message.type === "string" && applyTelemetry(this.store, message.type, message.data)) {
           applied += 1;
+          this.lastAppliedTypes.add(message.type);
         }
       } catch {
         // A malformed telemetry object is isolated and skipped; later objects remain usable.
@@ -27,6 +39,17 @@ export class CerealAdapter {
 
   reset() {
     this.buffer = "";
+    this.lastAppliedTypes.clear();
+  }
+}
+
+export function parseTelemetryJson(raw) {
+  try { return JSON.parse(raw); } catch {
+    // Some forks emit bare NaN. Never replace tokens inside valid JSON strings,
+    // including escaped quotes/backslashes in road names and alert text.
+    const repaired = raw.replace(/"(?:\\[\s\S]|[^"\\])*"|\bNaN\b/g,
+      (token) => token === "NaN" ? "null" : token);
+    return JSON.parse(repaired);
   }
 }
 

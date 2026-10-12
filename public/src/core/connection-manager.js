@@ -1,3 +1,4 @@
+import { normalizeHost } from "./device-discovery.js";
 const RETRY_DELAY = 2000;
 const MAX_RETRIES = 3;
 const WIDE_CAMERA_MAX_SPEED = 10;
@@ -19,7 +20,7 @@ export class ConnectionManager extends EventTarget {
     this.wakeLock = null;
 
     transport.addEventListener("data", (event) => {
-      adapter.apply(event.detail);
+      if (adapter.apply(event.detail) > 0) transport.markTelemetryReceived?.(adapter.lastAppliedTypes);
       this.switchCameraIfNeeded();
     });
     transport.addEventListener("state", (event) => {
@@ -33,12 +34,12 @@ export class ConnectionManager extends EventTarget {
     });
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
     transport.addEventListener("progress", (event) => this.dispatchEvent(new CustomEvent("progress", { detail: event.detail })));
+    transport.addEventListener("health", (event) => this.dispatchEvent(new CustomEvent("health", { detail: event.detail })));
   }
 
   async connect(input, { remember = true } = {}) {
     if (this.connecting) return;
-    this.device = typeof input === "string" ? this.discovery.remember(input) : input;
-    if (remember) this.device = this.discovery.remember(this.device);
+    this.device = typeof input === "string" ? normalizeHost(input) : input;
     this.userClosed = false;
     this.connecting = true;
     clearTimeout(this.retryTimer);
@@ -50,6 +51,7 @@ export class ConnectionManager extends EventTarget {
     this.dispatchEvent(new CustomEvent("state", { detail: "connecting" }));
     try {
       await this.transport.connect(this.device, { camera: this.streamType });
+      if (remember) this.device = this.discovery.remember(this.device);
       this.retryCount = 0;
       this.store.setConnection(true);
       this.dispatchEvent(new CustomEvent("connected", { detail: this.device }));

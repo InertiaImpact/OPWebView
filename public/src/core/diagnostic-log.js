@@ -1,12 +1,13 @@
 import { APP_CHANNEL, storageKey } from "./app-channel.js";
+import { browserStorage, readStored, writeStored } from "./storage.js";
 const STORAGE_KEY = storageKey("opwebview.diagnostics.v1");
 const MAX_ENTRIES = 100;
 const MAX_FIELD_LENGTH = 500;
 
-export const APP_BUILD = `2026.10.10-dual-sites.2-${APP_CHANNEL}`;
+export const APP_BUILD = `2026.10.12-promotion.1-${APP_CHANNEL}`;
 
 export class DiagnosticLog extends EventTarget {
-  constructor(storage = globalThis.localStorage) {
+  constructor(storage = browserStorage()) {
     super();
     this.storage = storage;
     this.entries = this.load();
@@ -61,16 +62,20 @@ export class DiagnosticLog extends EventTarget {
   }
 
   load() {
-    try {
-      const value = JSON.parse(this.storage?.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(value) ? value.slice(-MAX_ENTRIES) : [];
-    } catch {
-      return [];
-    }
+    return readStored(this.storage, STORAGE_KEY, [], (value) => {
+      if (!Array.isArray(value)) return null;
+      return value.filter((entry) => entry && typeof entry === "object" &&
+        typeof entry.at === "string" && Number.isFinite(Date.parse(entry.at)) &&
+        ["info", "warn", "error"].includes(entry.level) &&
+        typeof entry.source === "string" && typeof entry.message === "string")
+        .slice(-MAX_ENTRIES).map((entry) => ({ at: entry.at, level: entry.level,
+          source: clip(entry.source, 60), message: clip(entry.message, MAX_FIELD_LENGTH),
+          ...(entry.detail === undefined ? {} : { detail: sanitizeDetail(entry.detail) }) }));
+    });
   }
 
   save() {
-    try { this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.entries)); } catch {}
+    writeStored(this.storage, STORAGE_KEY, this.entries);
   }
 }
 

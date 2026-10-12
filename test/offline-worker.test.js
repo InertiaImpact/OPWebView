@@ -65,9 +65,9 @@ test("offline navigation with a new query and scripts use the same installed rel
   const runtime = worker();
   await runtime.install();
   const page = await runtime.request("?v=another-release", "navigate");
-  const script = await runtime.request("src/app.js?v=12");
+  const script = await runtime.request("src/app.js?v=20");
   assert.match(await page.text(), /index\.html/);
-  assert.match(await script.text(), /app\.js\?v=12/);
+  assert.match(await script.text(), /app\.js\?v=20/);
   assert.equal(runtime.networkCalls, 0);
   assert.equal(runtime.skipped, false);
 });
@@ -83,11 +83,11 @@ test("stable worker leaves development navigation to the network or dev worker",
 });
 
 test("dev offline shell and cache cleanup never touch stable caches", async () => {
-  const runtime = worker({ root: `${base}dev/`, cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v21", "opwebview-dev-shell-v1", "opwebview-dev-shell-v21"] });
+  const runtime = worker({ root: `${base}dev/`, cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v22", "opwebview-dev-shell-v1", "opwebview-dev-shell-v22"] });
   await runtime.install();
   await runtime.activate();
   assert.deepEqual(runtime.deleted, ["opwebview-dev-shell-v1"]);
-  assert.ok(runtime.opened.every((name) => name === "opwebview-dev-shell-v22"));
+  assert.ok(runtime.opened.every((name) => name === "opwebview-dev-shell-v23"));
   assert.match(await (await runtime.request("", "navigate")).text(), /\/dev\/index\.html/);
 });
 
@@ -95,6 +95,14 @@ test("a failed update install cannot force activation", async () => {
   const runtime = worker({ failInstall: true });
   await assert.rejects(runtime.install(), /No internet/);
   assert.equal(runtime.skipped, false);
+});
+
+test("stable promotion retains the preceding stable offline release and leaves dev caches alone", async () => {
+  const runtime = worker({ cacheKeys: ["opwebview-shell-v1", "opwebview-shell-v22", "opwebview-dev-shell-v32"] });
+  await runtime.install();
+  await runtime.activate();
+  assert.deepEqual(runtime.deleted, ["opwebview-shell-v1"]);
+  assert.ok(runtime.opened.every((name) => name === "opwebview-shell-v23"));
 });
 
 test("a missing module offline gets an error response, never cached HTML", async () => {
