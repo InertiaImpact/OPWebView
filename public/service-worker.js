@@ -1,25 +1,25 @@
 const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
 const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
-const CACHE_VERSION = 34;
+const CACHE_VERSION = 35;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=13",
+  "./styles.css?v=14",
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",
-  "./src/app.js?v=22",
+  "./src/app.js?v=23",
   "./src/core/app-channel.js",
   "./src/demo.js?v=3",
   "./src/core/state.js?v=3",
   "./src/core/telemetry-adapter.js?v=3",
-  "./src/core/device-discovery.js?v=2",
+  "./src/core/device-discovery.js?v=3",
   "./src/core/device-discovery.js",
   "./src/core/storage.js",
-  "./src/core/webrtc-transport.js?v=4",
-  "./src/core/connection-manager.js?v=2",
-  "./src/core/diagnostic-log.js?v=3",
+  "./src/core/webrtc-transport.js?v=5",
+  "./src/core/connection-manager.js?v=3",
+  "./src/core/diagnostic-log.js?v=4",
   "./src/core/viewport-controller.js",
   "./src/core/startup-connection.js",
   "./src/core/fullscreen-gesture.js",

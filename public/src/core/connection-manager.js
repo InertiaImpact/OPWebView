@@ -25,6 +25,13 @@ export class ConnectionManager extends EventTarget {
       this.switchCameraIfNeeded();
     });
     transport.addEventListener("state", (event) => {
+      // A peer that recovers before the retry begins no longer needs replacing.
+      if (event.detail === "connected" && !this.userClosed && !this.connecting && this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+        this.retryCount = 0;
+        this.store.setConnection(true);
+      }
       // Retry only after a stream was previously healthy, or while continuing
       // an existing recovery sequence. An initial negotiation failure needs to
       // remain visible so the user can act on its specific diagnostic.
@@ -36,6 +43,7 @@ export class ConnectionManager extends EventTarget {
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
     transport.addEventListener("progress", (event) => this.dispatchEvent(new CustomEvent("progress", { detail: event.detail })));
     transport.addEventListener("health", (event) => this.dispatchEvent(new CustomEvent("health", { detail: event.detail })));
+    transport.addEventListener("diagnostic", (event) => this.dispatchEvent(new CustomEvent("diagnostic", { detail: event.detail })));
   }
 
   async connect(input, { remember = true, camera = this.streamType } = {}) {

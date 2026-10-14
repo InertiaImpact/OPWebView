@@ -533,7 +533,9 @@ button { color: inherit; }
   overflow-wrap: anywhere;
 }
 .diagnostics-qr { display: grid; min-height: 250px; margin-top: 10px; padding: 14px; place-items: center; border-radius: 14px; color: #ff8b98; background: #fff; }
-.diagnostics-qr svg { display: block; width: 100%; max-width: 360px; height: auto; }
+.diagnostics-qr svg { display: block; width: 100%; max-width: min(360px, calc(100dvh - 160px)); height: auto; }
+.diagnostics-qr-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.diagnostics-qr-hint { margin: 10px 0 0; font-size: 12px; }
 .diagnostics-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .diagnostics-actions .danger-button { color: #ff9ba6; border-color: rgba(255, 83, 102, .24); background: rgba(255, 83, 102, .1); }
 

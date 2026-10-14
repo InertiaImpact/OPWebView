@@ -1,12 +1,12 @@
 import { TelemetryStore } from "./core/state.js?v=3";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
-import { DeviceDiscovery } from "./core/device-discovery.js?v=2";
-import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
-import { ConnectionManager } from "./core/connection-manager.js?v=2";
+import { DeviceDiscovery } from "./core/device-discovery.js?v=3";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=5";
+import { ConnectionManager } from "./core/connection-manager.js?v=3";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=3";
-import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=3";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=4";
 import { ViewportController } from "./core/viewport-controller.js";
 import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
@@ -53,6 +53,10 @@ const elements = {
   diagnosticsCount: $("#diagnostics-count"),
   diagnosticsQr: $("#diagnostics-qr"),
   diagnosticsQrSize: $("#diagnostics-qr-size"),
+  diagnosticsQrMode: $("#diagnostics-qr-mode"),
+  diagnosticsQrPrevious: $("#diagnostics-qr-previous"),
+  diagnosticsQrNext: $("#diagnostics-qr-next"),
+  diagnosticsQrHint: $("#diagnostics-qr-hint"),
   copyDiagnostics: $("#copy-diagnostics-button"),
   downloadDiagnostics: $("#download-diagnostics-button"),
   clearDiagnostics: $("#clear-diagnostics-button"),
@@ -95,6 +99,8 @@ let toastTimer = null;
 let updateRegistration = null;
 let networkPermission = null;
 let updateReloadPending = false;
+let detailedQrPages = null;
+let detailedQrIndex = 0;
 const editorPanels = [elements.editTray, elements.widgetPanel].map((panel) => installPanelDrag({
   panel, handle: panel.querySelector(".dock-header"), boundsElement: elements.app,
   enabled: () => widgets.editing
@@ -168,10 +174,20 @@ function openConnectionDialog() {
 
 function renderDiagnostics() {
   const text = diagnostics.text();
-  const qrPayload = diagnostics.qrPayload();
+  const qrPayload = detailedQrPages ? detailedQrPages[detailedQrIndex] : diagnostics.qrPayload();
   elements.diagnosticsOutput.textContent = text;
   elements.diagnosticsCount.textContent = `${diagnostics.entries.length} events`;
-  elements.diagnosticsQrSize.textContent = `${new TextEncoder().encode(qrPayload).length} bytes`;
+  elements.diagnosticsQrSize.textContent = `${detailedQrPages ? `${detailedQrIndex + 1}/${detailedQrPages.length} · ` : ""}${new TextEncoder().encode(qrPayload).length} bytes`;
+  elements.diagnosticsQrMode.textContent = detailedQrPages ? "Summary QR" : "Full log QR";
+  elements.diagnosticsQrMode.setAttribute("aria-pressed", String(Boolean(detailedQrPages)));
+  elements.diagnosticsQrPrevious.hidden = elements.diagnosticsQrNext.hidden = !detailedQrPages;
+  elements.diagnosticsQrPrevious.disabled = detailedQrIndex === 0;
+  elements.diagnosticsQrNext.disabled = !detailedQrPages || detailedQrIndex === detailedQrPages.length - 1;
+  elements.diagnosticsQrHint.textContent = detailedQrPages
+    ? `Full-log snapshot: scan all ${detailedQrPages.length} numbered pages. Reopen logs for a fresh snapshot.`
+    : "Quick summary includes the latest warning/error. Full log QR keeps all stored events.";
+  elements.diagnosticsQr.setAttribute("aria-label", detailedQrPages
+    ? `Full diagnostic log QR part ${detailedQrIndex + 1} of ${detailedQrPages.length}` : "QR code containing compact diagnostic JSON");
   elements.diagnosticsQr.replaceChildren();
   try {
     const factory = globalThis.qrcode;
@@ -187,6 +203,8 @@ function renderDiagnostics() {
 }
 
 function openDiagnostics() {
+  detailedQrPages = null;
+  detailedQrIndex = 0;
   renderDiagnostics();
   if (!elements.diagnosticsDialog.open) elements.diagnosticsDialog.showModal();
 }
@@ -243,10 +261,6 @@ async function connectDevice(input, { automatic = false } = {}) {
       throw new Error("Local-network access is blocked in Chrome's settings for this site. Allow it there and retry; your offline files and layouts can stay saved.");
     }
     await connection.connect(input);
-    elements.connectionDialog.close();
-    setConnectionStatus("connected", input.label || input.host || "Connected");
-    devicePanelOpen = false;
-    syncDevicePanel();
     showToast("Camera and telemetry are live.");
     return true;
   } catch (error) {
@@ -469,8 +483,22 @@ elements.downloadDiagnostics.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 elements.clearDiagnostics.addEventListener("click", () => {
+  detailedQrPages = null;
+  detailedQrIndex = 0;
   diagnostics.clear();
   renderDiagnostics();
+});
+elements.diagnosticsQrMode.addEventListener("click", () => {
+  // Freeze one snapshot so new events cannot reorder pages during capture.
+  detailedQrPages = detailedQrPages ? null : fullLogQrPages(diagnostics.text());
+  detailedQrIndex = 0;
+  renderDiagnostics();
+});
+elements.diagnosticsQrPrevious.addEventListener("click", () => {
+  if (detailedQrPages && detailedQrIndex > 0) { detailedQrIndex--; renderDiagnostics(); }
+});
+elements.diagnosticsQrNext.addEventListener("click", () => {
+  if (detailedQrPages && detailedQrIndex < detailedQrPages.length - 1) { detailedQrIndex++; renderDiagnostics(); }
 });
 elements.demo.addEventListener("click", toggleDemo);
 elements.doneEditing.addEventListener("click", () => toggleEditing(false));
@@ -541,18 +569,36 @@ elements.video.addEventListener("emptied", () => {
   updateUi();
 });
 store.addEventListener("change", updateUi);
-connection.addEventListener("state", (event) => {
-  diagnostics.add(event.detail === "failed" ? "error" : "info", "webrtc", `State changed to ${event.detail}`);
+function handleConnectionState(state) {
+  diagnostics.add(state === "failed" ? "error" : "info", "webrtc", `State changed to ${state}`);
   if (demoActive) return;
-  if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
-  else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
-  else if (event.detail === "failed") {
+  if (["connecting", "waiting"].includes(state)) setConnectionStatus("connecting", state === "waiting" ? "Starting streams" : "Connecting");
+  else if (state === "connected") {
+    setConnectionStatus("connected", connection.device?.label || "Connected");
+    if (elements.connectionDialog.open) elements.connectionDialog.close();
+    elements.connectionError.hidden = true;
+    devicePanelOpen = false;
+    syncDevicePanel();
+  }
+  else if (state === "interrupted") setConnectionStatus("offline", "Recovering link");
+  else if (state === "failed") {
     setConnectionStatus("offline", connection.retryCount > 0 ? "Reconnecting" : "Connection failed");
+    // Automatic retries use the status/toast, not an obstructing device panel.
+    if (!connection.retryTimer && connection.retryCount === 0) devicePanelOpen = true;
+    syncDevicePanel();
+  }
+  else if (state === "offline") {
+    setConnectionStatus("offline", "Offline");
     devicePanelOpen = true;
     syncDevicePanel();
   }
-  else if (event.detail === "offline") setConnectionStatus("offline", "Offline");
   else setConnectionStatus("disconnected", "Offline");
+}
+connection.addEventListener("state", (event) => handleConnectionState(event.detail));
+connection.addEventListener("diagnostic", (event) => {
+  const detail = event.detail;
+  const interrupted = ["failed", "disconnected", "closed"].includes(detail.peer) || ["channel-error", "channel-close", "recovery-timeout"].includes(detail.kind);
+  diagnostics.add(interrupted ? "warn" : "info", "webrtc", `Link ${detail.kind}: ${detail.peer || "unknown"}; ICE ${detail.ice || "unknown"}`, detail);
 });
 connection.addEventListener("progress", (event) => {
   diagnostics.add("info", "webrtc", event.detail);
@@ -562,7 +608,10 @@ connection.addEventListener("progress", (event) => {
   elements.connectionError.hidden = false;
 });
 connection.addEventListener("retry", (event) => {
-  diagnostics.add("warn", "webrtc", `Connection lost; retry ${event.detail} of 3`);
+  diagnostics.add("warn", "webrtc", `Connection lost; retry ${event.detail} of 3`, {
+    peer: transport.peer?.connectionState, ice: transport.peer?.iceConnectionState,
+    channel: transport.channel?.readyState, online: navigator.onLine, hidden: document.hidden
+  });
   showToast(`Connection lost. Retry ${event.detail} of 3…`);
 });
 connection.addEventListener("health", (event) => {

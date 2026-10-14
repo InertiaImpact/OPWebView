@@ -59,8 +59,9 @@ export class DeviceDiscovery extends EventTarget {
   }
 
   async scan({ signal, onReachable = () => {}, initialTimeoutMs = 2400 } = {}) {
+    const saved = this.saved();
     const candidates = new Map();
-    for (const device of this.saved()) candidates.set(device.authority, device);
+    for (const device of saved) candidates.set(device.authority, device);
     for (const host of DEFAULT_CANDIDATES) {
       const device = normalizeHost(host);
       if (!candidates.has(device.authority)) candidates.set(device.authority, device);
@@ -78,8 +79,13 @@ export class DeviceDiscovery extends EventTarget {
     }));
 
     if (!signal?.aborted && !results.some((device) => device.reachable)) {
-      const prefixes = new Set(this.saved().map((device) => privateSubnetPrefix(device.host)).filter(Boolean));
-      for (const prefix of await discoverLocalSubnetPrefixes()) prefixes.add(prefix);
+      // Current interfaces take priority over historical networks. Keep saved
+      // devices intact when DHCP or Wi-Fi changes; never require clearing data.
+      const prefixes = new Set(await discoverLocalSubnetPrefixes());
+      for (const device of saved) {
+        const prefix = privateSubnetPrefix(device.host);
+        if (prefix) prefixes.add(prefix);
+      }
       for (const prefix of [...prefixes].slice(0, 3)) {
         if (signal?.aborted) break;
         this.dispatchEvent(new CustomEvent("scanprogress", { detail: `Scanning ${prefix}.x…` }));
@@ -122,7 +128,9 @@ export class DeviceDiscovery extends EventTarget {
   async scanSubnet(prefix, existing, signal) {
     const queue = subnetHosts(prefix)
       .map((host) => normalizeHost(host))
-      .filter((device) => !existing.has(device.authority));
+      // An initial timeout is not proof that a saved device stays unavailable.
+      // Retry saved IPs first, once, then search the rest of the bounded subnet.
+      .sort((a, b) => Number(existing.has(b.authority)) - Number(existing.has(a.authority)));
     let cursor = 0;
     let found = null;
 
@@ -130,7 +138,8 @@ export class DeviceDiscovery extends EventTarget {
       while (!found && !signal?.aborted && cursor < queue.length) {
         const device = queue[cursor++];
         if (await this.probe(device, 1300, signal) && !found && !signal?.aborted) {
-          found = { ...device, displayName: `comma (${device.host})` };
+          const saved = existing.get(device.authority);
+          found = { ...device, ...saved, displayName: saved?.displayName || `comma (${device.host})` };
         }
       }
     };

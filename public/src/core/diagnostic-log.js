@@ -4,7 +4,7 @@ const STORAGE_KEY = storageKey("opwebview.diagnostics.v1");
 const MAX_ENTRIES = 100;
 const MAX_FIELD_LENGTH = 500;
 
-export const APP_BUILD = `2026.10.12-editor-drag.1-${APP_CHANNEL}`;
+export const APP_BUILD = `2026.10.14-discovery-recovery.1-${APP_CHANNEL}`;
 
 export class DiagnosticLog extends EventTarget {
   constructor(storage = browserStorage()) {
@@ -80,7 +80,10 @@ export class DiagnosticLog extends EventTarget {
 }
 
 export function compactDiagnosticPayload(entries, context, maxBytes = 1200) {
-  const compactEntries = entries.slice(-24).map((entry) => ({
+  const latestProblem = entries.findLast((entry) => ["warn", "error"].includes(entry.level));
+  const recent = entries.slice(-24);
+  if (latestProblem && !recent.includes(latestProblem)) recent.unshift(latestProblem);
+  const compactEntries = recent.map((entry) => ({
     t: entry.at,
     l: entry.level,
     s: entry.source,
@@ -94,13 +97,50 @@ export function compactDiagnosticPayload(entries, context, maxBytes = 1200) {
     context,
     events: compactEntries
   };
-  while (payload.events.length > 1 && byteLength(JSON.stringify(payload)) > maxBytes) payload.events.shift();
+  const problem = compactEntries[recent.indexOf(latestProblem)];
+  while (payload.events.length > 1 && byteLength(JSON.stringify(payload)) > maxBytes) {
+    const removable = payload.events.findIndex((event, index) => event !== problem && index < payload.events.length - 1);
+    if (removable < 0) break;
+    payload.events.splice(removable, 1);
+  }
   let encoded = JSON.stringify(payload);
   if (byteLength(encoded) > maxBytes) {
     payload.context = { page: context?.page, online: context?.online, secure: context?.secure };
     encoded = JSON.stringify(payload);
   }
+  // UTF-8 characters and escaped JSON can use several bytes per character.
+  // Shrink fields, not the protected failure/recovery events, when necessary.
+  for (let limit = 100; byteLength(encoded) > maxBytes && limit >= 10; limit = Math.floor(limit / 2)) {
+    for (const event of payload.events) {
+      event.m = clip(event.m, limit);
+      if (event.d !== undefined) event.d = sanitizeDetail(event.d, limit);
+    }
+    encoded = JSON.stringify(payload);
+  }
   return encoded;
+}
+
+// Lossless, optional full-log transfer. Numbered parts share an ID and must be
+// joined in order by a QR decoder/LLM; no compression or new dependency needed.
+export function fullLogQrPages(text, maxBytes = 1200) {
+  const characters = Array.from(String(text));
+  const header = {
+    format: "opwebview-log-chunk-v1", build: APP_BUILD,
+    id: globalThis.crypto?.randomUUID?.() || new Date().toISOString(),
+    part: characters.length + 1, total: characters.length + 1
+  };
+  if (byteLength(JSON.stringify({ ...header, text: "" })) > maxBytes) throw new Error("QR byte budget is too small for log metadata.");
+  const chunks = [];
+  let chunk = "";
+  for (const character of characters) {
+    if (byteLength(JSON.stringify({ ...header, text: chunk + character })) > maxBytes) {
+      if (!chunk) throw new Error("QR byte budget is too small for log metadata.");
+      chunks.push(chunk);
+      chunk = character;
+    } else chunk += character;
+  }
+  if (chunk || !chunks.length) chunks.push(chunk);
+  return chunks.map((text, index) => JSON.stringify({ ...header, part: index + 1, total: chunks.length, text }));
 }
 
 function diagnosticContext() {

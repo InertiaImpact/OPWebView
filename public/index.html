@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
@@ -133,7 +133,7 @@
           </div>
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
-        <p class="dialog-copy">Stored only in this browser. The QR contains recent events as JSON for a QR decoder. Copy or download the full log to share with an LLM. Logs include device addresses and browser information.</p>
+        <p class="dialog-copy">Stored only in this browser. Use the summary QR for quick diagnosis, or Full log QR for numbered pages containing all stored events. Copy or Download also shares the full log. Logs include device addresses and browser information.</p>
         <div class="diagnostics-grid">
           <section>
             <div class="section-heading diagnostics-heading"><span>Event log</span><span id="diagnostics-count"></span></div>
@@ -141,7 +141,13 @@
           </section>
           <section class="diagnostics-qr-section">
             <div class="section-heading diagnostics-heading"><span>LLM-readable QR</span><span id="diagnostics-qr-size"></span></div>
+            <div class="diagnostics-qr-controls">
+              <button id="diagnostics-qr-mode" class="secondary-button" type="button" aria-pressed="false">Full log QR</button>
+              <button id="diagnostics-qr-previous" class="secondary-button" type="button" aria-label="Previous QR page" hidden>←</button>
+              <button id="diagnostics-qr-next" class="secondary-button" type="button" aria-label="Next QR page" hidden>→</button>
+            </div>
             <div id="diagnostics-qr" class="diagnostics-qr" aria-label="QR code containing compact diagnostic JSON"></div>
+            <p id="diagnostics-qr-hint" class="dialog-copy diagnostics-qr-hint"></p>
           </section>
         </div>
         <div class="diagnostics-actions">
@@ -156,6 +162,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=22"></script>
+    <script type="module" src="./src/app.js?v=23"></script>
   </body>
 </html>
