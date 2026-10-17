@@ -4,7 +4,7 @@ Stable and dev retain their separate storage keys. Every saved-data consumer val
 
 - Active layouts accept version 2 and its unversioned predecessor. Legacy v1 layouts migrate to normalized v2 records, with the old record removed only after the replacement is saved. Numeric strings are converted, invalid geometry falls back, bounds are constrained, unknown widgets are dropped, and new widgets use defaults. Valid small cells retain their size.
 - Named layouts retain the existing map format, validating and normalizing each layout independently.
-- Saved devices retain the existing array format. Older strings and host-only records are normalized; missing protocol/port defaults are restored. Invalid or duplicate entries are removed. A stored address still must pass live discovery before automatic connection.
+- Legacy saved-device records retain the existing array format and migration helpers. Dev no longer reads these records for discovery or displays them, and ordinary connections do not write new device history. Found devices are session-only; layouts, offline files and permissions are unaffected.
 - Diagnostic history retains valid events and drops malformed entries.
 
 Future incompatible changes must add an explicit migration from the preceding supported schema here; do not guess how an unknown version should translate. Extend the storage regression tests with real old-format examples. Offline app updates remain complete-release installations and do not clear settings or browser permissions. A module-import test ensures every static dependency is included in the offline release.

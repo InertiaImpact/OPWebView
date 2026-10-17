@@ -33,11 +33,31 @@ test("one Devices control moves between the open header and collapsed pill and h
   }
 });
 
-test("unconfirmed comma.local is hidden without removing the discovery fallback", async () => {
+test("unconfirmed comma.local and saved devices stay hidden; parallel hostname checking remains", async () => {
   const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
   const discovery = await readFile(new URL("../public/src/core/device-discovery.js", import.meta.url), "utf8");
-  assert.match(app, /listedDevices = devices;[\s\S]*?devices = devices\.filter\(\(device\) => device\.host\.toLowerCase\(\)\.replace\(\/\\\.\$\/, ""\) !== "comma\.local" \|\| device\.reachable === true\)/);
+  assert.match(app, /devices = devices\.filter\(\(device\) => device\.reachable === true\);\s*listedDevices = devices/);
+  assert.doesNotMatch(app, /discovery\.saved\(\)/);
   assert.match(discovery, /DEFAULT_CANDIDATES = \["comma\.local"\]/);
+});
+
+test("device cards show only current verified results and keep the connected device identifiable", async () => {
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  const source = app.match(/function renderDevices\(devices\) \{[\s\S]*?\n\}/)[0];
+  const node = () => ({ children: [], append(...items) { this.children.push(...items); }, replaceChildren() { this.children = []; }, addEventListener() {} });
+  const list = node(), demo = {};
+  const current = { host: "192.168.138.233", authority: "192.168.138.233:5001", reachable: true };
+  const context = { document: { createElement: node }, elements: { deviceList: list, demo },
+    listedDevices: [], demoActive: false, store: { state: { isConnected: true } },
+    connection: { device: current, connecting: false }, stopDemo() {}, connectDevice() {} };
+  runInNewContext(`${source}; renderDevices(devices);`, { ...context, devices: [
+    { host: "192.168.26.233", reachable: false }, { host: "comma.local" }, current
+  ] });
+  assert.equal(list.children.length, 1);
+  const [summary, button] = list.children[0].children;
+  assert.match(summary.children[1].textContent, /found on this network/);
+  assert.equal(button.textContent, "Connected"); assert.equal(button.disabled, true);
+  assert.equal(demo.hidden, true);
 });
 
 test("editing menus overlay unchanged widget bounds and can collapse independently", async () => {

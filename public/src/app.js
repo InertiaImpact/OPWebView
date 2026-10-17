@@ -1,14 +1,14 @@
 import { TelemetryStore } from "./core/state.js?v=3";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
-import { DeviceDiscovery } from "./core/device-discovery.js?v=3";
+import { DeviceDiscovery } from "./core/device-discovery.js?v=4";
 import { WebRTCTransport } from "./core/webrtc-transport.js?v=5";
-import { ConnectionManager } from "./core/connection-manager.js?v=3";
+import { ConnectionManager } from "./core/connection-manager.js?v=4";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=3";
 import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=4";
 import { ViewportController } from "./core/viewport-controller.js";
-import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js";
+import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=2";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
 import { DevWatermark } from "./core/dev-watermark.js";
 import { installLayoutGesture } from "./core/layout-gesture.js";
@@ -93,7 +93,7 @@ const viewport = new ViewportController({ app: elements.app, video: elements.vid
 
 let demoActive = false;
 let devicePanelOpen = true;
-let listedDevices = discovery.saved();
+let listedDevices = [];
 let installPrompt = null;
 let toastTimer = null;
 let updateRegistration = null;
@@ -112,8 +112,8 @@ const startup = new StartupConnection({ discovery,
   status: (state, message) => {
     elements.startupStatus.hidden = state === "idle";
     elements.startupMessage.textContent = message || "";
-    elements.startupCancel.hidden = !["scanning", "waiting"].includes(state);
-    elements.discover.disabled = ["scanning", "waiting", "connecting"].includes(state);
+    elements.startupCancel.hidden = state !== "scanning";
+    elements.discover.disabled = ["scanning", "connecting"].includes(state);
     if (state !== "idle") diagnostics.add(state === "permission" ? "warn" : "info", "startup", message || state);
   }
 });
@@ -210,10 +210,9 @@ function openDiagnostics() {
 }
 
 function renderDevices(devices) {
+  devices = devices.filter((device) => device.reachable === true);
   listedDevices = devices;
-  // Keep the hostname fallback in discovery, not as an unconfirmed UI entry.
-  devices = devices.filter((device) => device.host.toLowerCase().replace(/\.$/, "") !== "comma.local" || device.reachable === true);
-  const available = devices.some((device) => device.reachable === true);
+  const available = devices.length > 0;
   elements.demo.hidden = available;
   if (available && demoActive) stopDemo();
   elements.deviceList.replaceChildren();
@@ -231,13 +230,14 @@ function renderDevices(devices) {
     const name = document.createElement("strong");
     name.textContent = device.displayName || device.label || device.host;
     const address = document.createElement("span");
-    address.textContent = `${device.authority}${device.reachable === true ? " · available" : device.reachable === false ? " · not found" : " · checking"}`;
+    const connected = !demoActive && store.state.isConnected && connection.device?.authority === device.authority;
+    address.textContent = `${device.authority} · found on this network`;
     summary.append(name, address);
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = "Connect";
+    button.textContent = connected ? "Connected" : "Connect";
     button.hidden = device.reachable !== true;
-    button.disabled = connection.connecting;
+    button.disabled = connected || connection.connecting;
     button.addEventListener("click", () => connectDevice(device));
     card.append(summary, button);
     elements.deviceList.append(card);
@@ -445,8 +445,12 @@ elements.startupCancel.addEventListener("click", () => {
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden) startup.cancel(); });
 discovery.addEventListener("scanstart", () => {
+  renderDevices(!demoActive && store.state.isConnected && connection.device ? [{ ...connection.device, reachable: true }] : []);
   elements.discover.disabled = true;
   diagnostics.add("info", "discovery", "Network scan started");
+});
+discovery.addEventListener("scanreport", (event) => {
+  diagnostics.add(event.detail.found || event.detail.cancelled ? "info" : "warn", "discovery", "Current-network scan report", event.detail);
 });
 discovery.addEventListener("scanprogress", (event) => {
   elements.discover.textContent = event.detail;
@@ -458,7 +462,9 @@ discovery.addEventListener("devicefound", (event) => renderDevices([
 discovery.addEventListener("scancomplete", (event) => {
   elements.discover.disabled = false;
   elements.discover.textContent = "Scan network";
-  renderDevices(event.detail);
+  const active = !demoActive && store.state.isConnected && connection.device;
+  renderDevices(active && !event.detail.some((device) => device.authority === active.authority)
+    ? [{ ...active, reachable: true }, ...event.detail] : event.detail);
   diagnostics.add("info", "discovery", "Network scan completed", {
     devices: event.detail.map((device) => ({ address: device.authority, reachable: device.reachable }))
   });
@@ -595,6 +601,9 @@ function handleConnectionState(state) {
   else setConnectionStatus("disconnected", "Offline");
 }
 connection.addEventListener("state", (event) => handleConnectionState(event.detail));
+connection.addEventListener("connected", (event) => renderDevices([
+  { ...event.detail, reachable: true }, ...listedDevices.filter((device) => device.authority !== event.detail.authority)
+]));
 connection.addEventListener("diagnostic", (event) => {
   const detail = event.detail;
   const interrupted = ["failed", "disconnected", "closed"].includes(detail.peer) || ["channel-error", "channel-close", "recovery-timeout"].includes(detail.kind);
@@ -718,7 +727,7 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-renderDevices(discovery.saved());
+renderDevices([]);
 diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 refreshNetworkPermission();
 window.addEventListener("load", () => startup.start(), { once: true });

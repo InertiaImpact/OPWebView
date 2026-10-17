@@ -8,7 +8,7 @@ test("every statically imported app module is included in the atomic offline rel
   const shell = worker.match(/const APP_SHELL = \[([\s\S]*?)\];/)[1];
   const base = "https://offline.test/";
   const cached = new Set([...shell.matchAll(/"([^"]+)"/g)].map((match) => new URL(match[1], base).href));
-  const pending = [new URL("./src/app.js?v=23", base)];
+  const pending = [new URL("./src/app.js?v=24", base)];
   const visited = new Set();
   while (pending.length) {
     const url = pending.pop();
@@ -27,16 +27,16 @@ test("the page and offline shell use the current versioned application modules",
     readFile(new URL("../public/service-worker.js", import.meta.url), "utf8")
   ]);
 
-  assert.match(index, /src\/app\.js\?v=23/);
-  assert.match(worker, /src\/app\.js\?v=23/);
+  assert.match(index, /src\/app\.js\?v=24/);
+  assert.match(worker, /src\/app\.js\?v=24/);
   assert.match(app, /core\/webrtc-transport\.js\?v=5/);
   assert.match(worker, /core\/webrtc-transport\.js\?v=5/);
-  assert.match(worker, /const CACHE_VERSION = 35/);
+  assert.match(worker, /const CACHE_VERSION = 36/);
   assert.match(worker, /widgets\/indicator-smoothing\.js/);
-  assert.match(app, /core\/device-discovery\.js\?v=3/);
-  assert.match(worker, /core\/device-discovery\.js\?v=3/);
-  assert.match(app, /core\/connection-manager\.js\?v=3/);
-  assert.match(worker, /core\/connection-manager\.js\?v=3/);
+  assert.match(app, /core\/device-discovery\.js\?v=4/);
+  assert.match(worker, /core\/device-discovery\.js\?v=4/);
+  assert.match(app, /core\/connection-manager\.js\?v=4/);
+  assert.match(worker, /core\/connection-manager\.js\?v=4/);
   assert.match(index, /vendor\/qrcode-generator\.js\?v=1/);
   assert.match(worker, /core\/diagnostic-log\.js\?v=4/);
   assert.match(worker, /core\/viewport-controller\.js/);

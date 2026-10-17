@@ -59,52 +59,59 @@ export class DeviceDiscovery extends EventTarget {
   }
 
   async scan({ signal, onReachable = () => {}, initialTimeoutMs = 2400 } = {}) {
-    const saved = this.saved();
-    const candidates = new Map();
-    for (const device of saved) candidates.set(device.authority, device);
-    for (const host of DEFAULT_CANDIDATES) {
-      const device = normalizeHost(host);
-      if (!candidates.has(device.authority)) candidates.set(device.authority, device);
-    }
-
+    const startedAt = performance.now();
+    const results = new Map();
+    const report = { currentSubnets: [], hiddenLocalAddresses: false, checked: 0,
+      failures: { timeout: 0, network: 0, http: 0, schema: 0 }, found: 0 };
+    this.lastScan = report;
+    const probe = (device, timeout) => {
+      report.checked++;
+      return this.probe(device, timeout, signal, (reason, detail) => {
+        if (!Object.hasOwn(report.failures, reason)) return;
+        report.failures[reason]++;
+        if (!report.example && ["http", "schema"].includes(reason)) report.example = { address: device.authority, reason, ...detail };
+      });
+    };
+    const found = (device) => {
+      if (signal?.aborted || results.has(device.authority)) return;
+      const result = { ...device, reachable: true };
+      results.set(device.authority, result);
+      report.found++;
+      // Publish before invoking auto-connect, which may immediately abort scanning.
+      this.dispatchEvent(new CustomEvent("devicefound", { detail: result }));
+      onReachable(result);
+    };
     this.dispatchEvent(new CustomEvent("scanstart"));
-    this.dispatchEvent(new CustomEvent("scanprogress", { detail: "Checking saved addresses…" }));
-    const results = await Promise.all([...candidates.values()].map(async (device) => {
-      const result = { ...device, reachable: await this.probe(device, initialTimeoutMs, signal) };
-      if (result.reachable && !signal?.aborted) {
-        this.dispatchEvent(new CustomEvent("devicefound", { detail: result }));
-        onReachable(result);
-      }
-      return result;
+    this.dispatchEvent(new CustomEvent("scanprogress", { detail: "Checking the current network…" }));
+    // Hostname resolution and current-interface discovery run together. Nothing
+    // from saved drives is probed, displayed, or used to guess today's subnet.
+    const hostnameScan = Promise.all(DEFAULT_CANDIDATES.map(async (host) => {
+      const device = normalizeHost(host);
+      if (await probe(device, initialTimeoutMs)) found(device);
     }));
-
-    if (!signal?.aborted && !results.some((device) => device.reachable)) {
-      // Current interfaces take priority over historical networks. Keep saved
-      // devices intact when DHCP or Wi-Fi changes; never require clearing data.
-      const prefixes = new Set(await discoverLocalSubnetPrefixes());
-      for (const device of saved) {
-        const prefix = privateSubnetPrefix(device.host);
-        if (prefix) prefixes.add(prefix);
-      }
-      for (const prefix of [...prefixes].slice(0, 3)) {
+    try {
+      const local = await this.localSubnets(signal);
+      report.currentSubnets = local.prefixes.slice(0, 3);
+      report.hiddenLocalAddresses = local.hiddenLocalAddresses;
+      for (const prefix of report.currentSubnets) {
         if (signal?.aborted) break;
         this.dispatchEvent(new CustomEvent("scanprogress", { detail: `Scanning ${prefix}.x…` }));
-        const found = await this.scanSubnet(prefix, candidates, signal);
-        if (found) {
-          results.push({ ...found, reachable: true });
-          this.dispatchEvent(new CustomEvent("devicefound", { detail: { ...found, reachable: true } }));
-          onReachable({ ...found, reachable: true });
-          break;
-        }
+        await this.scanSubnet(prefix, signal, found, probe);
       }
+      await hostnameScan;
+    } finally {
+      report.cancelled = Boolean(signal?.aborted && !report.found);
+      report.elapsedMs = Math.round(performance.now() - startedAt);
+      this.dispatchEvent(new CustomEvent("scanreport", { detail: report }));
     }
-
-    results.sort((a, b) => Number(b.reachable) - Number(a.reachable) || (b.lastConnected || 0) - (a.lastConnected || 0));
-    this.dispatchEvent(new CustomEvent("scancomplete", { detail: results }));
-    return results;
+    const devices = [...results.values()];
+    this.dispatchEvent(new CustomEvent("scancomplete", { detail: devices }));
+    return devices;
   }
 
-  async probe(device, timeoutMs = 2400, signal) {
+  localSubnets(signal) { return discoverLocalSubnetPrefixes(signal); }
+
+  async probe(device, timeoutMs = 2400, signal, report = () => {}) {
     if (signal?.aborted) return false;
     try {
       const options = {
@@ -117,34 +124,29 @@ export class DeviceDiscovery extends EventTarget {
       const response = await fetch(`${deviceBaseUrl(device)}/schema?services=deviceState`, options);
       // Only auto-connect to a positively identified comma service, never a
       // random HTTP server or opaque no-CORS response discovered on port 5001.
-      if (!response.ok) return false;
+      if (!response.ok) { report("http", { status: response.status }); return false; }
       const schema = await response.json();
-      return Boolean(schema?.deviceState && typeof schema.deviceState === "object");
-    } catch {
+      const valid = Boolean(schema?.deviceState && typeof schema.deviceState === "object" && !Array.isArray(schema.deviceState));
+      if (!valid) report("schema", { message: "Response is not a deviceState schema" });
+      return valid;
+    } catch (error) {
+      if (!signal?.aborted) report(error.name === "TimeoutError" ? "timeout" : error instanceof SyntaxError ? "schema" : "network");
       return false;
     }
   }
 
-  async scanSubnet(prefix, existing, signal) {
-    const queue = subnetHosts(prefix)
-      .map((host) => normalizeHost(host))
-      // An initial timeout is not proof that a saved device stays unavailable.
-      // Retry saved IPs first, once, then search the rest of the bounded subnet.
-      .sort((a, b) => Number(existing.has(b.authority)) - Number(existing.has(a.authority)));
+  async scanSubnet(prefix, signal, onReachable = () => {}, probe = (device, timeout) => this.probe(device, timeout, signal)) {
+    const queue = subnetHosts(prefix).map((host) => normalizeHost(host));
     let cursor = 0;
-    let found = null;
-
     const worker = async () => {
-      while (!found && !signal?.aborted && cursor < queue.length) {
+      while (!signal?.aborted && cursor < queue.length) {
         const device = queue[cursor++];
-        if (await this.probe(device, 1300, signal) && !found && !signal?.aborted) {
-          const saved = existing.get(device.authority);
-          found = { ...device, ...saved, displayName: saved?.displayName || `comma (${device.host})` };
+        if (await probe(device, 1300) && !signal?.aborted) {
+          onReachable({ ...device, displayName: `comma (${device.host})` });
         }
       }
     };
     await Promise.all(Array.from({ length: Math.min(SUBNET_SCAN_CONCURRENCY, queue.length) }, worker));
-    return found;
   }
 }
 
@@ -190,35 +192,43 @@ export function subnetHosts(prefix) {
   return Array.from({ length: 254 }, (_, index) => `${prefix}.${index + 1}`);
 }
 
-async function discoverLocalSubnetPrefixes() {
-  if (typeof RTCPeerConnection === "undefined") return [];
+export async function discoverLocalSubnetPrefixes(signal) {
+  if (typeof RTCPeerConnection === "undefined") return { prefixes: [], hiddenLocalAddresses: true };
   const prefixes = new Set();
-  const peer = new RTCPeerConnection({ iceServers: [] });
+  let peer, hiddenLocalAddresses = false;
+  const addAddress = (address) => {
+    const prefix = privateSubnetPrefix(address);
+    if (prefix) prefixes.add(prefix);
+    else if (String(address || "").endsWith(".local")) hiddenLocalAddresses = true;
+  };
   try {
+    if (signal?.aborted) return { prefixes: [], hiddenLocalAddresses: false };
+    peer = new RTCPeerConnection({ iceServers: [] });
     peer.createDataChannel("discovery");
     peer.addEventListener("icecandidate", (event) => {
-      const address = event.candidate?.candidate?.split(/\s+/)[4];
-      const prefix = privateSubnetPrefix(address);
-      if (prefix) prefixes.add(prefix);
+      addAddress(event.candidate?.address || event.candidate?.candidate?.split(/\s+/)[4]);
     });
     await peer.setLocalDescription(await peer.createOffer());
     await new Promise((resolve) => {
-      const timer = setTimeout(resolve, 1200);
-      peer.addEventListener("icegatheringstatechange", () => {
-        if (peer.iceGatheringState === "complete") {
-          clearTimeout(timer);
-          resolve();
-        }
-      });
+      const done = () => { clearTimeout(timer); peer.removeEventListener("icegatheringstatechange", change); signal?.removeEventListener("abort", done); resolve(); };
+      const change = () => { if (peer.iceGatheringState === "complete") done(); };
+      const timer = setTimeout(done, 1200);
+      peer.addEventListener("icegatheringstatechange", change);
+      signal?.addEventListener("abort", done, { once: true });
+      if (signal?.aborted || peer.iceGatheringState === "complete") done();
     });
-    for (const match of (peer.localDescription?.sdp || "").matchAll(/candidate:[^\r\n]+\s(\d+\.\d+\.\d+\.\d+)\s\d+\styp\shost/g)) {
-      const prefix = privateSubnetPrefix(match[1]);
-      if (prefix) prefixes.add(prefix);
+    if (signal?.aborted) return { prefixes: [], hiddenLocalAddresses };
+    for (const match of (peer.localDescription?.sdp || "").matchAll(/candidate:[^\r\n]+?\s(\S+)\s\d+\styp\shost/g)) addAddress(match[1]);
+    if (peer.getStats) {
+      const stats = await peer.getStats();
+      stats.forEach((candidate) => {
+        if (candidate.type === "local-candidate" && candidate.candidateType === "host") addAddress(candidate.address || candidate.ip);
+      });
     }
   } catch {
-    // Modern browsers can hide host candidates; saved IPs still provide a subnet.
+    // Permission to fetch LAN devices does not grant access to interface IPs.
   } finally {
-    peer.close();
+    peer?.close();
   }
-  return [...prefixes];
+  return { prefixes: [...prefixes], hiddenLocalAddresses: hiddenLocalAddresses || prefixes.size === 0 };
 }

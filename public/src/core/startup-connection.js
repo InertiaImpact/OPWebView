@@ -6,17 +6,14 @@ export async function localNetworkPermission(permissions = globalThis.navigator?
 }
 
 export class StartupConnection {
-  constructor({ discovery, permission, connect, idle, status = () => {},
-    setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = (id) => clearTimeout(id) }) {
-    Object.assign(this, { discovery, permission, connect, idle, status, setTimer, clearTimer });
+  constructor({ discovery, permission, connect, idle, status = () => {} }) {
+    Object.assign(this, { discovery, permission, connect, idle, status });
     this.generation = 0;
   }
 
   cancel() {
     this.generation++;
     this.controller?.abort();
-    this.clearTimer(this.timer);
-    this.timer = null;
     this.running = false;
     this.status("idle");
   }
@@ -39,10 +36,8 @@ export class StartupConnection {
       // A local fetch is the permission request: there is no web Permissions
       // API request() method. Denied grants must be changed by the user.
       this.status("scanning", "Scanning for your comma… Allow local-network access if prompted.");
-      let chosen = null;
       const connect = async (device) => {
         if (!current()) return;
-        this.clearTimer(this.timer); this.timer = null;
         this.running = false;
         this.controller.abort();
         this.status("connecting", `Connecting to ${device.label || device.host}…`);
@@ -58,25 +53,18 @@ export class StartupConnection {
         // Give the user time to answer a first-load browser permission prompt.
         initialTimeoutMs: permission === "prompt" ? 30000 : 2400, onReachable: (device) => {
         if (!current()) return;
-        if (device.lastConnected) { void connect(device); return; }
-        if (chosen) return;
-        chosen = device;
-        this.status("waiting", `Found ${device.label || device.host}. Connecting in 5 seconds…`);
-        this.timer = this.setTimer(async () => {
-          this.timer = null;
-          if (!current()) return;
-          if (await this.discovery.probe(chosen, 1300, this.controller.signal)) await connect(chosen);
-          else if (current()) { this.running = false; this.status("not-found", "The discovered comma is no longer available. Tap Scan network to retry."); }
-        }, 5000);
+        void connect(device);
       }});
       if (!current()) return;
-      if (!chosen && !results.some((device) => device.reachable)) {
+      if (!results.some((device) => device.reachable)) {
         this.running = false;
         const state = await this.permission();
         if (generation !== this.generation) return;
         this.status(state === "denied" || state === "prompt" ? "permission" : "not-found",
           state === "denied" ? "Local-network access is blocked. Allow it in this site's browser settings."
-            : "No comma found. Tap Scan network to retry, or + to enter an IP address.");
+            : this.discovery.lastScan?.hiddenLocalAddresses && !this.discovery.lastScan?.currentSubnets.length
+              ? "The browser did not expose this Wi-Fi subnet. Use + to enter the comma's current IP address."
+              : "No comma found on the current network. Tap Scan network to retry, or + to enter its current IP address.");
       }
     } catch (error) {
       if (generation !== this.generation) return;

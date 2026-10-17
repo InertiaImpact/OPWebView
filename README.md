@@ -12,7 +12,7 @@ Features:
 - Twenty live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
 - Built-in Classic, Enhanced, and Detailed layouts adapted from gerrylum's OPView layouts branch
 - Named custom layouts saved locally, with recall, deletion, visibility controls, drag, resize, and preset-aware reset
-- Saved-device discovery with a `comma.local` probe and manual local-IP entry
+- Current-network discovery with a parallel `comma.local` check and manual local-IP entry
 - Road/wide-road camera switching with the same speed hysteresis as opview
 - PWA installation, offline shell caching, standalone display, and screen wake lock
 - A no-hardware demo mode for validating the layout and renderer
@@ -31,9 +31,9 @@ npm run check
 npm run serve
 ```
 
-Open `http://127.0.0.1:4173`. On dev, discovery starts automatically; saved reachable devices connect immediately, while a newly found device gets a five-second delay. Use **+ Add IP address** if discovery misses it, or **Demo** without hardware. Long-press the dashboard to edit; **Done** locks it. Double-tap the live view or demo to enter/exit fullscreen. See [startup and controls](docs/startup-connection.md) for limitations.
+Open `http://127.0.0.1:4173`. On dev, discovery starts automatically and connects to the first verified device immediately. Only devices found on this network appear; old drive addresses are not scanned or listed. Use **+ Add IP address** if discovery misses it, or **Demo** without hardware. Long-press the dashboard to edit; **Done** locks it. Double-tap the live view or demo to enter/exit fullscreen. See [startup and controls](docs/startup-connection.md) for limitations.
 
-Once connected, the device panel and launcher disappear. Reopen **Devices / logs** from the editing Views panel for diagnostics, including copyable JSON and a compact QR report. The QR contains recent diagnostic events, not the entire log.
+Once connected, the device panel and launcher disappear. Reopen **Devices / logs** from the editing Views panel to see found devices and diagnostics. The summary QR retains recent issues; **Full log QR** transfers all stored events across numbered pages. Copy/Download also share the complete log.
 
 ## Device requirements
 
@@ -41,7 +41,7 @@ The comma must be on the same network, on-road with OPView streaming enabled, an
 
 Current Chrome/Chromium is the primary target. Allow local-network access when prompted; permission alone does not bypass device CORS requirements. Other browsers may block HTTPS-to-local-HTTP signaling. Video and telemetry remain peer-to-peer; GitHub Pages serves only the application files.
 
-Web pages cannot enumerate Bonjour services. Discovery probes saved addresses and `comma.local`, with a bounded private-subnet fallback where an address is known. Browsers may hide the local subnet, so manual IP entry remains necessary on some networks.
+Web pages cannot enumerate Bonjour services. Dev scans current private subnets exposed by browser ICE candidates/statistics while checking `comma.local` independently. That hostname is not a required fallback. If the browser hides interface addresses and the hostname does not resolve, enter the comma's current IP manually. Logs distinguish hidden interfaces, timeouts, HTTP errors and incompatible schema; network/CORS failures remain indistinguishable when the browser masks the cause.
 
 After a successful online visit/cache installation, install the page as a PWA for offline launch. Offline use still needs a reachable comma on the local network. Updates preserve compatible saved settings and replace the cached app only after a complete release is available; do not routinely clear site data. See [stored-data handling](docs/stored-data.md).
 

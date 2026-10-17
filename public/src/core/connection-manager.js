@@ -46,7 +46,7 @@ export class ConnectionManager extends EventTarget {
     transport.addEventListener("diagnostic", (event) => this.dispatchEvent(new CustomEvent("diagnostic", { detail: event.detail })));
   }
 
-  async connect(input, { remember = true, camera = this.streamType } = {}) {
+  async connect(input, { remember = false, camera = this.streamType } = {}) {
     if (this.connecting) return;
     const generation = ++this.generation;
     this.device = typeof input === "string" ? normalizeHost(input) : input;

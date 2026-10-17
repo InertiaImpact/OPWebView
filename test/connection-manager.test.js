@@ -38,12 +38,13 @@ test("a stream that drops after becoming healthy still schedules recovery", asyn
   await manager.disconnect();
 });
 
-test("only successfully connected devices enter the saved reconnect history", async () => {
+test("ordinary connections no longer save addresses; explicit legacy saves still require success", async () => {
   const h = harness(async()=>{throw new Error("failed");});
   let remembered=0; h.manager.discovery.remember=(device)=>{remembered++;return device;};
-  await assert.rejects(h.manager.connect("192.168.1.10")); assert.equal(remembered,0);
+  await assert.rejects(h.manager.connect("192.168.1.10", { remember: true })); assert.equal(remembered,0);
   h.transport.connect=async()=>{};
-  await h.manager.connect("192.168.1.10"); assert.equal(remembered,1);
+  await h.manager.connect("192.168.1.10"); assert.equal(remembered,0);
+  await h.manager.connect("192.168.1.10", { remember: true }); assert.equal(remembered,1);
 });
 
 function pendingHarness() {
@@ -76,7 +77,7 @@ test("dynamic experimental cannot close startup before video; handoffs serialize
   assert.equal(h.store.state.isSwitchingStream, false);
   assert.equal(h.manager.connecting, false);
   assert.equal(h.store.state.isConnected, true);
-  assert.equal(h.remembered(), 1, "camera handoffs do not rewrite saved device history");
+  assert.equal(h.remembered(), 0, "ordinary sessions and camera handoffs do not save device history");
   assert.equal(h.closes(), 0, "transport owns peer replacement without a separate close gap");
   await h.manager.disconnect();
 });
@@ -120,7 +121,7 @@ test("a cancelled startup cannot claim success or clear a newer connection attem
   h.attempts[1].resolve(); await second;
   assert.equal(h.store.state.isConnected, true);
   assert.equal(h.manager.device.host, "192.168.1.11");
-  assert.equal(h.remembered(), 1);
+  assert.equal(h.remembered(), 0);
   await h.manager.disconnect();
 });
 

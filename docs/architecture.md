@@ -8,8 +8,8 @@ OP WebView is a viewer, not a driving controller. It requests camera and read-on
 
 The app is framework-free. This keeps the GitHub Pages artifact static and the offline release small.
 
-- `core/device-discovery.js` owns saved pairing and browser-safe discovery providers.
-- `core/startup-connection.js` coordinates automatic discovery, saved-device priority and the five-second new-device countdown on dev.
+- `core/device-discovery.js` owns current-network discovery and scan reports; legacy storage helpers remain for compatibility.
+- `core/startup-connection.js` connects immediately to the first verified device on dev and cancels redundant probes.
 - `core/webrtc-transport.js` owns SDP exchange, H.264 preference, media, and the data channel.
 - `core/connection-manager.js` owns retries, camera switching, and wake lock lifecycle.
 - `core/telemetry-adapter.js` turns a fragmented/concatenated JSON stream into messages.
@@ -31,11 +31,11 @@ The editor uses percentage coordinates so a layout survives different screen siz
 
 Native opview discovers `_ssh._tcp` Bonjour services. A normal GitHub-hosted page cannot enumerate DNS-SD services. The browser implementation therefore:
 
-1. Lists saved devices immediately.
-2. Probes saved hosts and `comma.local`; dev does this on page load, prioritizing previously connected devices.
-3. Tries bounded private /24 scans when saved addresses or browser ICE candidates reveal a subnet.
-4. Accepts a hostname or local IP when automatic discovery cannot find the device.
-5. Persists successful pairings locally. On dev, new devices get a five-second countdown before automatic connection.
+1. Starts with an empty list; lists only devices verified on the current network.
+2. Checks `comma.local` independently while obtaining current interface addresses from browser ICE candidates/statistics.
+3. Scans at most three exposed private /24 networks, without historical subnet guesses.
+4. Connects to the first verified device immediately and retains found devices in memory for the reopened panel.
+5. Accepts a hostname or current local IP if automatic discovery cannot find it, including when browser privacy hides all interface addresses.
 
 `DeviceDiscovery` is isolated so a WebMCP helper, companion service, QR pairing, or a future browser discovery API can be added later.
 
