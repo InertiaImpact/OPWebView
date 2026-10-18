@@ -163,7 +163,12 @@ test("only parsed core telemetry establishes readiness; stale warnings recover w
   transport.readiness.videoReady = true;
   channel.dispatchEvent(new MessageEvent("message", { data: '{"type":"clockSync","data":{"action":"pong"}}' }));
   assert.equal(transport.readiness.dataReceived, false);
-  await assert.rejects(transport.waitForStreams(transport.generation, 0), /parsed carState and modelV2/);
+  await assert.rejects(transport.waitForStreams(transport.generation, 0), (error) => {
+    assert.match(error.message, /carState\/modelV2/);
+    assert.match(error.cause.message, /carState, modelV2/);
+    assert.equal(error.retryable, true);
+    return true;
+  });
   channel.dispatchEvent(new MessageEvent("message", { data: '{"type":"unknown","data":{}}' }));
   assert.equal(transport.readiness.dataReceived, false);
   channel.dispatchEvent(new MessageEvent("message", { data: '{"type":"carState","data":{"vEgo":20}}' }));

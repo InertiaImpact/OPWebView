@@ -24,6 +24,13 @@ const panel = (title, rows, badge = "", footer = "") => `<header><button type="b
 const leadTone = (lead) => lead ? leadWarningColor(lead.distance, lead.relative) : "dim";
 const networkBars = (value) => ({ poor: 1, moderate: 2, good: 3, great: 4 })[value] || 0;
 
+function networkSignal(state, cellular = false) {
+  const active = cellular ? /^cell[2345]G$/.test(state.networkType) : state.networkType === "wifi";
+  const bars = networkBars(state.networkStrength);
+  if (!state.deviceSeen || !active || !bars) return dash;
+  return `<span class="network-bars" aria-label="${cellular ? 'Cellular' : 'Wi-Fi'} ${safe(state.networkStrength)} signal">${[0,1,2,3].map((i) => `<i class="${i < bars ? 'lit' : ''}" style="height:${35 + i * 20}%"></i>`).join('')}</span>`;
+}
+
 function driveLabel(state) {
   return ({ engaged: "Engaged", override: "Override", latOnly: "Steering", longOnly: "Cruise" })[state.status] || "Standby";
 }
@@ -120,9 +127,9 @@ export const WIDGETS = Object.freeze([
       row("CPU", state.deviceSeen ? `${Math.round(state.cpuTempC)}°C` : dash),
       row("MEM", state.deviceSeen ? `${state.memoryUsagePercent}%` : dash),
       row("DISK", state.deviceSeen ? `${Math.round(100 - state.freeSpacePercent)}%` : dash),
-      row("Wi-Fi", state.deviceSeen ? `<span class="network-bars" aria-label="${safe(state.networkStrength)} signal">${[0,1,2,3].map((i) => `<i class="${i < networkBars(state.networkStrength) ? 'lit' : ''}" style="height:${35 + i * 20}%"></i>`).join('')}</span>` : dash),
+      row("Wi-Fi", networkSignal(state)),
       row("POWER", state.deviceSeen ? `${number(state.powerDrawW, 1)} W` : dash),
-      row("CALIB", state.calStatus === "calibrated" ? "100%" : state.calPerc ? `${state.calPerc}%` : dash)
+      row("CELL", networkSignal(state, true))
     ].join("")
   },
   {

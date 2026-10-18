@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
     <title>OP WebView</title>
   </head>
   <body>
@@ -54,7 +54,7 @@
         </section>
 
         <aside id="edit-tray" class="floating-panel view-panel" hidden aria-label="Views and layout tools">
-          <header class="dock-header"><span>Views</span><span id="layout-label">Classic</span><button class="panel-collapse" type="button" aria-label="Collapse views" aria-expanded="true">−</button></header>
+          <header class="dock-header panel-drag-handle" tabindex="0" aria-label="Move Views menu" title="Drag to move; use arrow keys when focused"><span>Views</span><span id="layout-label">Classic</span><button class="panel-collapse" type="button" aria-label="Collapse views" aria-expanded="true">−</button></header>
           <div id="layout-presets" class="layout-presets"></div>
           <div class="section-heading"><span>Saved views</span></div>
           <div id="saved-layouts" class="saved-layouts"></div>
@@ -67,7 +67,7 @@
           <button id="done-editing-button" type="button">Done</button>
         </aside>
         <aside id="widget-panel" class="floating-panel widget-panel" hidden aria-label="Visible widgets">
-          <header class="dock-header"><span>Widgets</span><button class="panel-collapse" type="button" aria-label="Collapse widgets" aria-expanded="true">−</button></header>
+          <header class="dock-header panel-drag-handle" tabindex="0" aria-label="Move Widgets menu" title="Drag to move; use arrow keys when focused"><span>Widgets</span><button class="panel-collapse" type="button" aria-label="Collapse widgets" aria-expanded="true">−</button></header>
           <div id="widget-toggles" class="widget-toggles"></div>
         </aside>
       </section>
@@ -77,24 +77,23 @@
       <form id="connection-form" method="dialog">
         <header class="dialog-header">
           <div>
-            <span class="eyebrow">MANUAL CONNECTION</span>
             <h2>Add a comma</h2>
           </div>
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
-        <p class="dialog-copy">Your device must be on the same network with <code>webrtcd</code> reachable on port 5001.</p>
+        <p class="dialog-copy">Same Wi-Fi. Enter the comma IP.</p>
         <p id="network-permission-status" class="dialog-copy" aria-live="polite"></p>
 
-        <label class="field-label" for="device-host">Hostname or local IP</label>
+        <label class="field-label" for="device-host">Comma IP or hostname</label>
         <div class="host-row">
           <input id="device-host" name="host" inputmode="url" autocomplete="url" placeholder="192.168.0.10 or comma.local" required />
           <button id="connect-submit" class="primary-button" value="default" type="submit">Connect</button>
         </div>
-        <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">View diagnostic log + QR</button>
+        <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">Logs + QR</button>
 
         <details class="compatibility-note">
-          <summary>Browser connection requirements</summary>
-          <p>Chrome will request local-network access. The comma must be onroad with OPView enabled so <code>webrtcd</code> is running. The endpoint must also allow this page’s origin with CORS.</p>
+          <summary>Connection help</summary>
+          <p>Use the same Wi-Fi, enable OPView on the comma, and allow local-network access. The comma's streaming service must accept browser requests.</p>
         </details>
       </form>
     </dialog>
@@ -108,7 +107,7 @@
           </div>
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
-        <p class="dialog-copy">Stored only in this browser. The QR contains recent events as JSON for a QR decoder. Copy or download the full log to share with an LLM. Logs include device addresses and browser information.</p>
+        <p class="dialog-copy">Stored only in this browser. Use the summary QR for quick diagnosis, or Full log QR for numbered pages containing all stored events. Copy or Download also shares the full log. Logs include device addresses and browser information.</p>
         <div class="diagnostics-grid">
           <section>
             <div class="section-heading diagnostics-heading"><span>Event log</span><span id="diagnostics-count"></span></div>
@@ -116,7 +115,13 @@
           </section>
           <section class="diagnostics-qr-section">
             <div class="section-heading diagnostics-heading"><span>LLM-readable QR</span><span id="diagnostics-qr-size"></span></div>
+            <div class="diagnostics-qr-controls">
+              <button id="diagnostics-qr-mode" class="secondary-button" type="button" aria-pressed="false">Full log QR</button>
+              <button id="diagnostics-qr-previous" class="secondary-button" type="button" aria-label="Previous QR page" hidden>←</button>
+              <button id="diagnostics-qr-next" class="secondary-button" type="button" aria-label="Next QR page" hidden>→</button>
+            </div>
             <div id="diagnostics-qr" class="diagnostics-qr" aria-label="QR code containing compact diagnostic JSON"></div>
+            <p id="diagnostics-qr-hint" class="dialog-copy diagnostics-qr-hint"></p>
           </section>
         </div>
         <div class="diagnostics-actions">
@@ -131,6 +136,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=21"></script>
+    <script type="module" src="./src/app.js?v=26"></script>
   </body>
 </html>

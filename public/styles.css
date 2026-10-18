@@ -270,8 +270,8 @@ button { color: inherit; }
 }
 .data-row span { color: #a6a6a6; font-size: clamp(6px, 1.05vmin, 13px); font-weight: 650; white-space: nowrap; }
 .data-row strong { overflow: hidden; font-size: clamp(8px, 1.55vmin, 18px); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.data-row strong.angle { color: #4d9dff; }
-.data-row strong.torque { color: #ff9a3c; }
+.data-row strong.angle { color: #3adb6d; }
+.data-row strong.torque { color: #4d9dff; }
 .data-row strong.good { color: #3adb6d; }
 .data-row strong.warn { color: #ff9a3c; }
 .data-row strong.dim { color: #777; }
@@ -476,6 +476,11 @@ button { color: inherit; }
 .panel-dialog::backdrop { background: rgba(0, 5, 8, 0.78); backdrop-filter: blur(8px); }
 .panel-dialog form { padding: 28px; }
 .small-dialog { width: min(460px, calc(100vw - 32px)); }
+#connection-dialog { width: min(480px, calc(100vw - 32px)); }
+#connection-dialog form { padding: 20px; }
+#connection-dialog h2 { margin-top: 0; font-size: 24px; }
+#connection-dialog .dialog-copy { margin: 12px 0; font-size: 13px; }
+#connection-dialog .compatibility-note { margin-top: 12px; padding: 10px 12px; }
 .layout-dialog { width: min(720px, calc(100vw - 32px)); }
 .diagnostics-dialog { width: min(1040px, calc(100vw - 32px)); }
 
@@ -533,7 +538,9 @@ button { color: inherit; }
   overflow-wrap: anywhere;
 }
 .diagnostics-qr { display: grid; min-height: 250px; margin-top: 10px; padding: 14px; place-items: center; border-radius: 14px; color: #ff8b98; background: #fff; }
-.diagnostics-qr svg { display: block; width: 100%; max-width: 360px; height: auto; }
+.diagnostics-qr svg { display: block; width: 100%; max-width: min(360px, calc(100dvh - 160px)); height: auto; }
+.diagnostics-qr-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.diagnostics-qr-hint { margin: 10px 0 0; font-size: 12px; }
 .diagnostics-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .diagnostics-actions .danger-button { color: #ff9ba6; border-color: rgba(255, 83, 102, .24); background: rgba(255, 83, 102, .1); }
 
@@ -634,7 +641,7 @@ html, body { min-width: 0; }
 .torque-arc { width: 100%; height: 100%; overflow: visible; }
 .torque-arc path { fill: none; stroke-linecap: round; }
 .health-grid .widget-surface { gap: calc(2 * var(--widget-unit)); padding: 0; border-radius: 0; }
-.health-grid .data-row { padding: 0 calc(3 * var(--widget-unit)); border-radius: calc(4 * var(--widget-unit)); }
+.health-grid .data-row { gap: calc(1 * var(--widget-unit)); padding: 0 calc(2 * var(--widget-unit)); border-radius: calc(4 * var(--widget-unit)); }
 .health-grid .data-row span { font-size: calc(4.6 * var(--widget-unit)); }
 .health-grid .data-row strong { font-size: calc(5.6 * var(--widget-unit)); }
 .network-bars { height: calc(5.9 * var(--widget-unit)); display: flex; align-items: end; gap: calc(.6 * var(--widget-unit)); }
@@ -726,6 +733,13 @@ html, body { min-width: 0; }
 .floating-panel.panel-collapsed .dock-header { margin-bottom: 0; }
 .floating-panel.panel-collapsed #layout-label { display: none; }
 .panel-collapse { margin-left: auto; }
+/* Handles own the gesture before Android can turn it into panel scrolling. */
+.widget-edit-bar, .widget-resize, .panel-drag-handle { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.panel-drag-handle { cursor: grab; }
+.panel-drag-handle::before { content: "⠿"; color: var(--muted); }
+.panel-drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.panel-dragging { z-index: 36; }
+.panel-dragging .panel-drag-handle { cursor: grabbing; }
 .device-panel-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 12px; background: #08141eed; color: var(--text); font-size: 13px; font-weight: 750; cursor: pointer; }
 .app > .device-panel-toggle { position: absolute; z-index: 36; left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); box-shadow: 0 6px 20px #0004; }
 .device-panel .device-panel-toggle { min-height: 44px; padding: 0; border: 0; background: transparent; }

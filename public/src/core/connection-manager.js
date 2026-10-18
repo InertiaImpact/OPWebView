@@ -14,6 +14,7 @@ export class ConnectionManager extends EventTarget {
     this.device = null;
     this.streamType = "road";
     this.retryCount = 0;
+    this.retryExhausted = false;
     this.retryTimer = null;
     this.connecting = false;
     this.userClosed = false;
@@ -25,10 +26,18 @@ export class ConnectionManager extends EventTarget {
       this.switchCameraIfNeeded();
     });
     transport.addEventListener("state", (event) => {
+      // A peer that recovers before the retry begins no longer needs replacing.
+      if (event.detail === "connected" && !this.userClosed && !this.connecting && this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+        this.retryCount = 0;
+        this.store.setConnection(true);
+      }
       // Retry only after a stream was previously healthy, or while continuing
       // an existing recovery sequence. An initial negotiation failure needs to
       // remain visible so the user can act on its specific diagnostic.
-      if (event.detail === "failed" && !this.userClosed && (this.store.state.isConnected || this.retryCount > 0)) {
+      if (event.detail === "failed" && !this.userClosed && !this.retryExhausted &&
+          (this.store.state.isConnected || this.retryCount > 0)) {
         this.scheduleReconnect();
       }
       this.dispatchEvent(new CustomEvent("state", { detail: event.detail }));
@@ -36,10 +45,15 @@ export class ConnectionManager extends EventTarget {
     transport.addEventListener("video", () => this.dispatchEvent(new CustomEvent("video")));
     transport.addEventListener("progress", (event) => this.dispatchEvent(new CustomEvent("progress", { detail: event.detail })));
     transport.addEventListener("health", (event) => this.dispatchEvent(new CustomEvent("health", { detail: event.detail })));
+    transport.addEventListener("diagnostic", (event) => this.dispatchEvent(new CustomEvent("diagnostic", { detail: event.detail })));
   }
 
-  async connect(input, { remember = true, camera = this.streamType } = {}) {
+  async connect(input, { remember = false, camera = this.streamType, retry = false } = {}) {
     if (this.connecting) return;
+    if (!retry) {
+      this.retryCount = 0;
+      this.retryExhausted = false;
+    }
     const generation = ++this.generation;
     this.device = typeof input === "string" ? normalizeHost(input) : input;
     this.userClosed = false;
@@ -59,6 +73,7 @@ export class ConnectionManager extends EventTarget {
       if (generation !== this.generation || this.userClosed) throw new Error("The connection attempt was cancelled.");
       if (remember) this.device = this.discovery.remember(this.device);
       this.retryCount = 0;
+      this.retryExhausted = false;
       this.store.setConnection(true);
       this.dispatchEvent(new CustomEvent("connected", { detail: this.device }));
       await this.acquireWakeLock();
@@ -66,8 +81,10 @@ export class ConnectionManager extends EventTarget {
     } catch (error) {
       if (generation !== this.generation) throw error;
       this.store.setConnection(false);
+      if (!this.userClosed && !this.retryExhausted && (error.retryable || this.retryCount > 0)) this.scheduleReconnect();
+      // Observers need the final retry/exhaustion decision, including failures
+      // from background retries that do not pass through the original UI call.
       this.dispatchEvent(new CustomEvent("error", { detail: error }));
-      if (!this.userClosed && this.retryCount > 0) this.scheduleReconnect();
       throw error;
     } finally {
       if (generation === this.generation) {
@@ -84,6 +101,7 @@ export class ConnectionManager extends EventTarget {
     clearTimeout(this.retryTimer);
     this.retryTimer = null;
     this.retryCount = 0;
+    this.retryExhausted = false;
     this.connecting = false;
     this.adapter.reset();
     await this.transport.close();
@@ -94,18 +112,19 @@ export class ConnectionManager extends EventTarget {
   }
 
   scheduleReconnect() {
-    if (this.userClosed || !this.device || this.retryTimer) return;
+    if (this.userClosed || this.retryExhausted || !this.device || this.retryTimer) return;
     this.store.setConnection(false);
     this.retryCount += 1;
     if (this.retryCount > MAX_RETRIES) {
-      this.dispatchEvent(new CustomEvent("state", { detail: "offline" }));
       this.retryCount = 0;
+      this.retryExhausted = true;
+      this.dispatchEvent(new CustomEvent("state", { detail: "offline" }));
       return;
     }
     this.dispatchEvent(new CustomEvent("retry", { detail: this.retryCount }));
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
-      this.connect(this.device, { remember: false }).catch(() => {});
+      this.connect(this.device, { remember: false, retry: true }).catch(() => {});
     }, RETRY_DELAY);
   }
 

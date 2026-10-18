@@ -1,17 +1,18 @@
 import { TelemetryStore } from "./core/state.js?v=3";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
-import { DeviceDiscovery } from "./core/device-discovery.js?v=2";
-import { WebRTCTransport } from "./core/webrtc-transport.js?v=4";
-import { ConnectionManager } from "./core/connection-manager.js?v=2";
+import { DeviceDiscovery } from "./core/device-discovery.js?v=4";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=6";
+import { ConnectionManager } from "./core/connection-manager.js?v=5";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
-import { DemoFeed } from "./demo.js?v=3";
-import { APP_BUILD, DiagnosticLog } from "./core/diagnostic-log.js?v=3";
+import { DemoFeed } from "./demo.js?v=4";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=6";
 import { ViewportController } from "./core/viewport-controller.js";
-import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js";
+import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=3";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
 import { DevWatermark } from "./core/dev-watermark.js";
 import { installLayoutGesture } from "./core/layout-gesture.js";
+import { installPanelDrag } from "./core/movable-panel.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -52,6 +53,10 @@ const elements = {
   diagnosticsCount: $("#diagnostics-count"),
   diagnosticsQr: $("#diagnostics-qr"),
   diagnosticsQrSize: $("#diagnostics-qr-size"),
+  diagnosticsQrMode: $("#diagnostics-qr-mode"),
+  diagnosticsQrPrevious: $("#diagnostics-qr-previous"),
+  diagnosticsQrNext: $("#diagnostics-qr-next"),
+  diagnosticsQrHint: $("#diagnostics-qr-hint"),
   copyDiagnostics: $("#copy-diagnostics-button"),
   downloadDiagnostics: $("#download-diagnostics-button"),
   clearDiagnostics: $("#clear-diagnostics-button"),
@@ -88,12 +93,18 @@ const viewport = new ViewportController({ app: elements.app, video: elements.vid
 
 let demoActive = false;
 let devicePanelOpen = true;
-let listedDevices = discovery.saved();
+let listedDevices = [];
 let installPrompt = null;
 let toastTimer = null;
 let updateRegistration = null;
 let networkPermission = null;
 let updateReloadPending = false;
+let detailedQrPages = null;
+let detailedQrIndex = 0;
+const editorPanels = [elements.editTray, elements.widgetPanel].map((panel) => installPanelDrag({
+  panel, handle: panel.querySelector(".dock-header"), boundsElement: elements.app,
+  enabled: () => widgets.editing
+}));
 const startup = new StartupConnection({ discovery,
   permission: refreshNetworkPermission,
   connect: (device) => connectDevice(device, { automatic: true }),
@@ -101,8 +112,8 @@ const startup = new StartupConnection({ discovery,
   status: (state, message) => {
     elements.startupStatus.hidden = state === "idle";
     elements.startupMessage.textContent = message || "";
-    elements.startupCancel.hidden = !["scanning", "waiting"].includes(state);
-    elements.discover.disabled = ["scanning", "waiting", "connecting"].includes(state);
+    elements.startupCancel.hidden = state !== "scanning";
+    elements.discover.disabled = ["scanning", "connecting"].includes(state);
     if (state !== "idle") diagnostics.add(state === "permission" ? "warn" : "info", "startup", message || state);
   }
 });
@@ -120,16 +131,18 @@ async function refreshNetworkPermission() {
       if (state === "granted" && !startup.running && !elements.startupStatus.hidden && !demoActive && !streamBusy()) startup.start();
     };
     const state = networkPermission.state;
+    elements.networkPermission.hidden = state === "granted";
     elements.networkPermission.textContent = state === "denied"
-      ? "Local-network access is blocked. Open this site's Chrome settings and allow Local network access, then return here. No need to clear site data."
+      ? "Network access blocked. Allow it in Chrome site settings."
       : state === "prompt"
-        ? "Press Connect or Scan network and allow Chrome's local-network prompt."
+        ? "Connect or scan, then allow network access."
         : "Local-network access is allowed.";
     diagnostics.add(state === "denied" ? "warn" : "info", "permission", `Local-network permission: ${state}`);
     return state;
   } catch {
     networkPermission = null;
-    elements.networkPermission.textContent = "Allow local-network access if your browser asks when connecting.";
+    elements.networkPermission.hidden = false;
+    elements.networkPermission.textContent = "Allow network access if asked.";
     return "unknown";
   }
 }
@@ -163,10 +176,20 @@ function openConnectionDialog() {
 
 function renderDiagnostics() {
   const text = diagnostics.text();
-  const qrPayload = diagnostics.qrPayload();
+  const qrPayload = detailedQrPages ? detailedQrPages[detailedQrIndex] : diagnostics.qrPayload();
   elements.diagnosticsOutput.textContent = text;
   elements.diagnosticsCount.textContent = `${diagnostics.entries.length} events`;
-  elements.diagnosticsQrSize.textContent = `${new TextEncoder().encode(qrPayload).length} bytes`;
+  elements.diagnosticsQrSize.textContent = `${detailedQrPages ? `${detailedQrIndex + 1}/${detailedQrPages.length} · ` : ""}${new TextEncoder().encode(qrPayload).length} bytes`;
+  elements.diagnosticsQrMode.textContent = detailedQrPages ? "Summary QR" : "Full log QR";
+  elements.diagnosticsQrMode.setAttribute("aria-pressed", String(Boolean(detailedQrPages)));
+  elements.diagnosticsQrPrevious.hidden = elements.diagnosticsQrNext.hidden = !detailedQrPages;
+  elements.diagnosticsQrPrevious.disabled = detailedQrIndex === 0;
+  elements.diagnosticsQrNext.disabled = !detailedQrPages || detailedQrIndex === detailedQrPages.length - 1;
+  elements.diagnosticsQrHint.textContent = detailedQrPages
+    ? `Full-log snapshot: scan all ${detailedQrPages.length} numbered pages. Reopen logs for a fresh snapshot.`
+    : "Quick summary includes the latest warning/error. Full log QR keeps all stored events.";
+  elements.diagnosticsQr.setAttribute("aria-label", detailedQrPages
+    ? `Full diagnostic log QR part ${detailedQrIndex + 1} of ${detailedQrPages.length}` : "QR code containing compact diagnostic JSON");
   elements.diagnosticsQr.replaceChildren();
   try {
     const factory = globalThis.qrcode;
@@ -182,15 +205,16 @@ function renderDiagnostics() {
 }
 
 function openDiagnostics() {
+  detailedQrPages = null;
+  detailedQrIndex = 0;
   renderDiagnostics();
   if (!elements.diagnosticsDialog.open) elements.diagnosticsDialog.showModal();
 }
 
 function renderDevices(devices) {
+  devices = devices.filter((device) => device.reachable === true);
   listedDevices = devices;
-  // Keep the hostname fallback in discovery, not as an unconfirmed UI entry.
-  devices = devices.filter((device) => device.host.toLowerCase().replace(/\.$/, "") !== "comma.local" || device.reachable === true);
-  const available = devices.some((device) => device.reachable === true);
+  const available = devices.length > 0;
   elements.demo.hidden = available;
   if (available && demoActive) stopDemo();
   elements.deviceList.replaceChildren();
@@ -208,13 +232,14 @@ function renderDevices(devices) {
     const name = document.createElement("strong");
     name.textContent = device.displayName || device.label || device.host;
     const address = document.createElement("span");
-    address.textContent = `${device.authority}${device.reachable === true ? " · available" : device.reachable === false ? " · not found" : " · checking"}`;
+    const connected = !demoActive && store.state.isConnected && connection.device?.authority === device.authority;
+    address.textContent = `${device.authority} · found on this network`;
     summary.append(name, address);
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = "Connect";
+    button.textContent = connected ? "Connected" : "Connect";
     button.hidden = device.reachable !== true;
-    button.disabled = connection.connecting;
+    button.disabled = connected || connection.connecting;
     button.addEventListener("click", () => connectDevice(device));
     card.append(summary, button);
     elements.deviceList.append(card);
@@ -235,20 +260,23 @@ async function connectDevice(input, { automatic = false } = {}) {
   diagnostics.add("info", "connection", "Connection requested", { device: input.authority || input.host || String(input) });
   try {
     if (await refreshNetworkPermission() === "denied") {
-      throw new Error("Local-network access is blocked in Chrome's settings for this site. Allow it there and retry; your offline files and layouts can stay saved.");
+      throw new Error("Network access blocked. Allow it in Chrome site settings.");
     }
     await connection.connect(input);
-    elements.connectionDialog.close();
-    setConnectionStatus("connected", input.label || input.host || "Connected");
-    devicePanelOpen = false;
-    syncDevicePanel();
     showToast("Camera and telemetry are live.");
     return true;
   } catch (error) {
-    diagnostics.add("error", "connection", error.message || "Connection failed", error);
-    setConnectionStatus("offline", connection.retryCount > 0 ? "Retrying" : "Connection failed");
+    const retrying = Boolean(connection.retryTimer);
+    diagnostics.add(retrying ? "warn" : "error", "connection", error.message || "Connection failed", error);
+    setConnectionStatus("offline", retrying ? "Retrying" : "Connection failed");
+    if (retrying) {
+      elements.connectionError.hidden = true;
+      devicePanelOpen = false;
+      syncDevicePanel();
+      return true; // Recovery accepted, not a claim that telemetry is ready.
+    }
     elements.connectionError.dataset.kind = "error";
-    elements.connectionError.textContent = error.message || "Connection failed.";
+    elements.connectionError.textContent = error.retryable ? "Data not ready. Tap Connect to retry." : error.message || "Connection failed.";
     elements.connectionError.hidden = false;
     devicePanelOpen = true;
     syncDevicePanel();
@@ -376,6 +404,7 @@ function toggleEditing(force) {
   elements.editTray.hidden = !editing;
   elements.widgetPanel.hidden = !editing;
   if (editing) renderLayoutDialog();
+  for (const panel of editorPanels) editing ? panel.constrain() : panel.cancelDrag();
   syncDevicePanel();
 }
 
@@ -425,8 +454,12 @@ elements.startupCancel.addEventListener("click", () => {
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden) startup.cancel(); });
 discovery.addEventListener("scanstart", () => {
+  renderDevices(!demoActive && store.state.isConnected && connection.device ? [{ ...connection.device, reachable: true }] : []);
   elements.discover.disabled = true;
   diagnostics.add("info", "discovery", "Network scan started");
+});
+discovery.addEventListener("scanreport", (event) => {
+  diagnostics.add(event.detail.found || event.detail.cancelled ? "info" : "warn", "discovery", "Current-network scan report", event.detail);
 });
 discovery.addEventListener("scanprogress", (event) => {
   elements.discover.textContent = event.detail;
@@ -438,7 +471,9 @@ discovery.addEventListener("devicefound", (event) => renderDevices([
 discovery.addEventListener("scancomplete", (event) => {
   elements.discover.disabled = false;
   elements.discover.textContent = "Scan network";
-  renderDevices(event.detail);
+  const active = !demoActive && store.state.isConnected && connection.device;
+  renderDevices(active && !event.detail.some((device) => device.authority === active.authority)
+    ? [{ ...active, reachable: true }, ...event.detail] : event.detail);
   diagnostics.add("info", "discovery", "Network scan completed", {
     devices: event.detail.map((device) => ({ address: device.authority, reachable: device.reachable }))
   });
@@ -463,8 +498,22 @@ elements.downloadDiagnostics.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 elements.clearDiagnostics.addEventListener("click", () => {
+  detailedQrPages = null;
+  detailedQrIndex = 0;
   diagnostics.clear();
   renderDiagnostics();
+});
+elements.diagnosticsQrMode.addEventListener("click", () => {
+  // Freeze one snapshot so new events cannot reorder pages during capture.
+  detailedQrPages = detailedQrPages ? null : fullLogQrPages(diagnostics.text());
+  detailedQrIndex = 0;
+  renderDiagnostics();
+});
+elements.diagnosticsQrPrevious.addEventListener("click", () => {
+  if (detailedQrPages && detailedQrIndex > 0) { detailedQrIndex--; renderDiagnostics(); }
+});
+elements.diagnosticsQrNext.addEventListener("click", () => {
+  if (detailedQrPages && detailedQrIndex < detailedQrPages.length - 1) { detailedQrIndex++; renderDiagnostics(); }
 });
 elements.demo.addEventListener("click", toggleDemo);
 elements.doneEditing.addEventListener("click", () => toggleEditing(false));
@@ -535,18 +584,62 @@ elements.video.addEventListener("emptied", () => {
   updateUi();
 });
 store.addEventListener("change", updateUi);
-connection.addEventListener("state", (event) => {
-  diagnostics.add(event.detail === "failed" ? "error" : "info", "webrtc", `State changed to ${event.detail}`);
+function handleConnectionState(state) {
+  diagnostics.add(state === "failed" ? "error" : "info", "webrtc", `State changed to ${state}`);
   if (demoActive) return;
-  if (["connecting", "waiting"].includes(event.detail)) setConnectionStatus("connecting", event.detail === "waiting" ? "Starting streams" : "Connecting");
-  else if (event.detail === "connected") setConnectionStatus("connected", connection.device?.label || "Connected");
-  else if (event.detail === "failed") {
+  if (["connecting", "waiting"].includes(state)) setConnectionStatus("connecting", state === "waiting" ? "Starting streams" : "Connecting");
+  else if (state === "connected") {
+    setConnectionStatus("connected", connection.device?.label || "Connected");
+    if (elements.connectionDialog.open) elements.connectionDialog.close();
+    elements.connectionError.hidden = true;
+    devicePanelOpen = false;
+    syncDevicePanel();
+  }
+  else if (state === "interrupted") setConnectionStatus("offline", "Recovering link");
+  else if (state === "failed") {
     setConnectionStatus("offline", connection.retryCount > 0 ? "Reconnecting" : "Connection failed");
+    // Automatic retries use the status/toast, not an obstructing device panel.
+    if (!connection.connecting && !connection.retryTimer && connection.retryCount === 0) devicePanelOpen = true;
+    syncDevicePanel();
+  }
+  else if (state === "offline") {
+    setConnectionStatus("offline", "Offline");
     devicePanelOpen = true;
     syncDevicePanel();
   }
-  else if (event.detail === "offline") setConnectionStatus("offline", "Offline");
   else setConnectionStatus("disconnected", "Offline");
+}
+connection.addEventListener("state", (event) => handleConnectionState(event.detail));
+connection.addEventListener("connected", (event) => {
+  if (!transport.staleServices.length) elements.streamHealth.hidden = true;
+  renderDevices([{ ...event.detail, reachable: true }, ...listedDevices.filter((device) => device.authority !== event.detail.authority)]);
+});
+connection.addEventListener("video", () => {
+  if (demoActive) return;
+  if (elements.connectionDialog.open) elements.connectionDialog.close();
+  elements.connectionError.hidden = true;
+  if (!store.state.isConnected) {
+    elements.streamHealth.textContent = "Waiting for data…";
+    elements.streamHealth.hidden = false;
+  }
+  devicePanelOpen = false;
+  syncDevicePanel();
+});
+connection.addEventListener("error", (event) => {
+  if (demoActive || connection.userClosed) return;
+  const error = event.detail;
+  diagnostics.add(connection.retryTimer ? "warn" : "error", "connection", error.message || "Connection failed", error);
+  if (connection.retryTimer) return;
+  elements.streamHealth.hidden = true;
+  elements.connectionError.textContent = error.retryable ? "Data not ready. Tap Connect to retry." : error.message || "Connection failed.";
+  elements.connectionError.hidden = false;
+  devicePanelOpen = true;
+  syncDevicePanel();
+});
+connection.addEventListener("diagnostic", (event) => {
+  const detail = event.detail;
+  const interrupted = ["failed", "disconnected", "closed"].includes(detail.peer) || ["channel-error", "channel-close", "recovery-timeout"].includes(detail.kind);
+  diagnostics.add(interrupted ? "warn" : "info", "webrtc", `Link ${detail.kind}: ${detail.peer || "unknown"}; ICE ${detail.ice || "unknown"}`, detail);
 });
 connection.addEventListener("progress", (event) => {
   diagnostics.add("info", "webrtc", event.detail);
@@ -556,8 +649,13 @@ connection.addEventListener("progress", (event) => {
   elements.connectionError.hidden = false;
 });
 connection.addEventListener("retry", (event) => {
-  diagnostics.add("warn", "webrtc", `Connection lost; retry ${event.detail} of 3`);
-  showToast(`Connection lost. Retry ${event.detail} of 3…`);
+  devicePanelOpen = false;
+  syncDevicePanel();
+  diagnostics.add("warn", "webrtc", `Retrying stream ${event.detail} of 3`, {
+    peer: transport.peer?.connectionState, ice: transport.peer?.iceConnectionState,
+    channel: transport.channel?.readyState, online: navigator.onLine, hidden: document.hidden
+  });
+  showToast(`Retrying stream ${event.detail} of 3…`);
 });
 connection.addEventListener("health", (event) => {
   const stale = event.detail.staleServices;
@@ -663,7 +761,7 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-renderDevices(discovery.saved());
+renderDevices([]);
 diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 refreshNetworkPermission();
 window.addEventListener("load", () => startup.start(), { once: true });

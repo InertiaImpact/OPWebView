@@ -83,6 +83,7 @@ export function createInitialState() {
     memoryUsagePercent: 0,
     freeSpacePercent: 100,
     networkStrength: "unknown",
+    networkType: "unknown",
     powerDrawW: 0,
     sensor: "",
     paramsSeen: false,
@@ -288,6 +289,7 @@ export function applyTelemetry(store, type, data) {
         state.memoryUsagePercent = Number(data.memoryUsagePercent) || 0;
         state.freeSpacePercent = Number(data.freeSpacePercent ?? 100);
         state.networkStrength = String(data.networkStrength ?? "unknown");
+        state.networkType = String(data.networkType ?? "unknown");
         state.powerDrawW = Number(data.powerDrawW) || 0;
       });
       return true;

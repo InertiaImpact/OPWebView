@@ -8,8 +8,8 @@ OP WebView is a viewer, not a driving controller. It requests camera and read-on
 
 The app is framework-free. This keeps the GitHub Pages artifact static and the offline release small.
 
-- `core/device-discovery.js` owns saved pairing and browser-safe discovery providers.
-- `core/startup-connection.js` coordinates automatic discovery, saved-device priority and the five-second new-device countdown.
+- `core/device-discovery.js` owns current-network discovery and scan reports; legacy storage helpers remain for compatibility.
+- `core/startup-connection.js` connects immediately to the first verified device on dev and cancels redundant probes.
 - `core/webrtc-transport.js` owns SDP exchange, H.264 preference, media, and the data channel.
 - `core/connection-manager.js` owns retries, camera switching, and wake lock lifecycle.
 - `core/telemetry-adapter.js` turns a fragmented/concatenated JSON stream into messages.
@@ -17,25 +17,27 @@ The app is framework-free. This keeps the GitHub Pages artifact static and the o
 - `render/projection.js` is pure projection math and has no DOM dependency.
 - `render/overlay-renderer.js` paints model geometry on a device-pixel-ratio-aware canvas.
 - `widgets/widget-manager.js` owns widget definitions, visibility, and persisted percentage-based layout.
-- Overlay paints are coalesced and limited to relevant inputs; ordinary widget paints update values/visibility without rewriting geometry. Torque/confidence retain their SVG nodes while animating, using the same presentation math as static rendering.
-- `core/storage.js` validates stored records and supports safe, per-key migration.
+- On dev, overlay paints are coalesced and limited to relevant inputs; ordinary widget paints update values/visibility without rewriting geometry. Torque/confidence retain their SVG nodes while animating, using the same presentation math as static rendering.
+- `core/storage.js` validates stored records and supports safe, per-key migration on dev.
 - `service-worker.js` caches only same-origin application code. It never intercepts device traffic.
 
 ## Widget extension model
 
 Each widget is a declarative entry containing an ID, title, visual role, and render function. Adding a widget does not require changes to drag/resize/persistence behavior. The Classic, Enhanced, and Detailed presets are immutable starting points; applying an edit creates a custom working layout. Named snapshots and the current working layout are stored in `localStorage` and remain device-local and available offline.
 
-The editor uses percentage coordinates so a layout survives different screen sizes and orientations. Editing menus overlay the unchanged widget workspace and collapse independently. The version-two persistence schema migrates the original five-widget layout without making newly added widgets unexpectedly visible. See [stored-data compatibility](stored-data.md).
+Device health shows power in watts and separate Wi-Fi/CELL cells. The [rx-wb-stg device telemetry](https://github.com/gerrylum/openpilot/blob/rx-wb-stg/openpilot/system/hardware/hardwared.py) supplies strength for the active network only; the inactive or unknown signal displays “–”, not a cached reading. Calibration telemetry is still used for camera overlays.
+
+The editor uses percentage coordinates so a layout survives different screen sizes and orientations. On dev, editing menus overlay the unchanged widget workspace and collapse independently. The version-two persistence schema migrates the original five-widget layout without making newly added widgets unexpectedly visible. See [stored-data compatibility](stored-data.md).
 
 ## Discovery strategy
 
 Native opview discovers `_ssh._tcp` Bonjour services. A normal GitHub-hosted page cannot enumerate DNS-SD services. The browser implementation therefore:
 
-1. Lists saved devices immediately.
-2. Probes saved hosts and `comma.local` on page load, prioritizing previously connected devices.
-3. Tries bounded private /24 scans when saved addresses or browser ICE candidates reveal a subnet.
-4. Accepts a hostname or local IP when automatic discovery cannot find the device.
-5. Persists successful pairings locally. New devices get a five-second countdown before automatic connection.
+1. Starts with an empty list; lists only devices verified on the current network.
+2. Checks `comma.local` independently while obtaining current interface addresses from browser ICE candidates/statistics.
+3. Scans at most three exposed private /24 networks, without historical subnet guesses.
+4. Connects to the first verified device immediately and retains found devices in memory for the reopened panel.
+5. Accepts a hostname or current local IP if automatic discovery cannot find it, including when browser privacy hides all interface addresses.
 
 `DeviceDiscovery` is isolated so a WebMCP helper, companion service, QR pairing, or a future browser discovery API can be added later.
 

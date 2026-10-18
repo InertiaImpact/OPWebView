@@ -28,6 +28,7 @@ export const SERVICE_PROFILES = Object.freeze([
   Object.freeze({ calibration: "liveCalibration", camera: "roadCameraState" })
 ]);
 export const TELEMETRY_STALE_MS = 5000;
+export const DISCONNECT_GRACE_MS = 5000;
 const LIVE_SERVICES = ["carState", "modelV2"];
 
 export class WebRTCTransport extends EventTarget {
@@ -40,6 +41,8 @@ export class WebRTCTransport extends EventTarget {
     this.readiness = createReadinessState();
     this.lastTelemetry = new Map();
     this.staleServices = [];
+    this.sessionLive = false;
+    this.disconnectTimer = null;
   }
 
   async connect(device, { camera = "road" } = {}) {
@@ -52,16 +55,9 @@ export class WebRTCTransport extends EventTarget {
 
     const peer = new RTCPeerConnection({ iceServers: [] });
     this.peer = peer;
-    peer.addEventListener("connectionstatechange", () => {
-      if (generation !== this.generation || peer !== this.peer) return;
-      const state = peer.connectionState;
-      this.readiness.peerConnected = state === "connected";
-      if (state === "connected") {
-        this.dispatchState("waiting");
-        this.dispatchProgress("Secure link established. Waiting for camera and telemetry…");
-      } else {
-        this.dispatchState(["failed", "disconnected", "closed"].includes(state) ? "failed" : "connecting");
-      }
+    peer.addEventListener("connectionstatechange", () => this.handlePeerState(peer, generation));
+    peer.addEventListener("iceconnectionstatechange", () => {
+      if (generation === this.generation && peer === this.peer) this.reportLinkState("ice", peer);
     });
     peer.addEventListener("track", (event) => {
       if (generation !== this.generation || event.track.kind !== "video") return;
@@ -109,6 +105,7 @@ export class WebRTCTransport extends EventTarget {
       if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
       clearTimeout(this.startupDiagnosticTimer);
       if (generation === this.generation) {
+        this.sessionLive = true;
         this.startTelemetryHealth();
         this.dispatchState("connected");
         this.dispatchProgress("Camera and telemetry are live.");
@@ -120,6 +117,48 @@ export class WebRTCTransport extends EventTarget {
       }
       throw error;
     }
+  }
+
+  handlePeerState(peer, generation) {
+    if (generation !== this.generation || peer !== this.peer) return;
+    const state = peer.connectionState;
+    this.reportLinkState("peer", peer);
+    this.readiness.peerConnected = state === "connected";
+    if (state === "connected") {
+      const recovered = this.disconnectTimer !== null;
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+      this.dispatchState(this.sessionLive ? "connected" : "waiting");
+      if (this.sessionLive) {
+        this.checkTelemetryHealth();
+        if (recovered) this.dispatchProgress("Secure link recovered without restarting streams.");
+      } else this.dispatchProgress("Secure link established. Waiting for camera and telemetry…");
+    } else if (state === "disconnected" && this.sessionLive) {
+      // A temporary ICE interruption can recover without replacing the peer.
+      // Startup and terminal failures retain their existing bounded deadlines.
+      if (this.disconnectTimer !== null) return;
+      this.dispatchState("interrupted");
+      this.dispatchProgress("Link interrupted; allowing up to five seconds for recovery…");
+      this.disconnectTimer = setTimeout(() => {
+        this.disconnectTimer = null;
+        if (generation !== this.generation || peer !== this.peer || peer.connectionState === "connected") return;
+        this.reportLinkState("recovery-timeout", peer);
+        this.dispatchState("failed");
+      }, DISCONNECT_GRACE_MS);
+    } else if (["failed", "disconnected", "closed"].includes(state)) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+      this.dispatchState("failed");
+    } else this.dispatchState(this.disconnectTimer !== null ? "interrupted" : "connecting");
+  }
+
+  reportLinkState(kind, peer = this.peer, error) {
+    this.dispatchEvent(new CustomEvent("diagnostic", { detail: {
+      kind, peer: peer?.connectionState, ice: peer?.iceConnectionState,
+      channel: this.channel?.readyState, online: globalThis.navigator?.onLine,
+      hidden: globalThis.document?.hidden,
+      ...(error ? { error: String(error.message || error).slice(0, 120) } : {})
+    } }));
   }
 
   attachChannel(channel, generation) {
@@ -137,8 +176,13 @@ export class WebRTCTransport extends EventTarget {
       }));
     };
     channel.addEventListener("open", onOpen, { once: true });
-    channel.addEventListener("error", () => {
-      if (generation === this.generation) this.dispatchProgress("The telemetry channel reported an error.");
+    channel.addEventListener("error", (event) => {
+      if (generation !== this.generation) return;
+      this.reportLinkState("channel-error", this.peer, event.error);
+      this.dispatchProgress("The telemetry channel reported an error.");
+    });
+    channel.addEventListener("close", () => {
+      if (generation === this.generation && this.peer) this.reportLinkState("channel-close");
     });
     channel.addEventListener("message", async (event) => {
       if (generation !== this.generation) return;
@@ -218,7 +262,17 @@ export class WebRTCTransport extends EventTarget {
       await delay(100);
     }
     if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
-    throw new Error(await describeReadinessFailure(this.peer, this.channel, this.readiness));
+    const readiness = { ...this.readiness };
+    const missing = LIVE_SERVICES.filter((type) => performance.now() - (this.lastTelemetry.get(type) ?? -Infinity) > TELEMETRY_STALE_MS);
+    const message = await describeReadinessFailure(this.peer, this.channel, readiness);
+    if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
+    const error = new Error(message);
+    // A playable camera with an open data channel can precede modelV2 while
+    // openpilot's driving model is still starting. Replacing that session is
+    // safe and bounded by ConnectionManager's normal retry limit.
+    error.retryable = readiness.videoReady && readiness.dataChannelOpen && !readiness.dataReceived;
+    if (error.retryable) error.cause = new Error(`Missing or stale telemetry: ${missing.join(", ")}`);
+    throw error;
   }
 
   send(type, data) {
@@ -233,6 +287,9 @@ export class WebRTCTransport extends EventTarget {
     const peer = this.peer;
     this.channel = null;
     this.peer = null;
+    clearTimeout(this.disconnectTimer);
+    this.disconnectTimer = null;
+    this.sessionLive = false;
     this.readiness = createReadinessState();
     clearInterval(this.healthTimer);
     clearTimeout(this.startupDiagnosticTimer);
@@ -272,7 +329,7 @@ export function readinessFailureMessage(readiness, videoStats = {}) {
     return "The telemetry channel opened, but the comma sent neither data nor camera frames. Confirm OpviewEnabled is on, put the comma onroad, and restart webrtcd.";
   }
   if (!readiness.dataReceived) {
-    return "The camera is live, but parsed carState and modelV2 telemetry did not both arrive. Confirm OPView streaming is enabled and check the device's telemetry bridge.";
+    return "Camera live; waiting for carState/modelV2 data.";
   }
   if ((videoStats.packetsReceived || 0) > 0 && (videoStats.framesDecoded || 0) === 0) {
     return "Telemetry is live and camera packets arrived, but this browser could not decode the H.264 video stream.";

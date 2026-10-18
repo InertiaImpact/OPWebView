@@ -5,53 +5,62 @@ import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { installFullscreenGesture } from "../public/src/core/fullscreen-gesture.js";
 
 function harness(devices, permission = "granted") {
-  const connected = [], statuses = [], timers = new Map();
-  let next = 0, idle = true;
+  const connected = [], statuses = [];
+  let idle = true;
   const discovery = {
     scan: async ({ onReachable }) => { devices.forEach(onReachable); return devices; },
     probe: async () => true
   };
   const startup = new StartupConnection({ discovery, permission: async () => permission,
     connect: async (device) => { connected.push(device); return true; }, idle: () => idle,
-    status: (...args) => statuses.push(args),
-    setTimer: (callback, delay) => { timers.set(++next, { callback, delay }); return next; },
-    clearTimer: (id) => timers.delete(id)
+    status: (...args) => statuses.push(args)
   });
-  return { startup, connected, statuses, timers, discovery, setIdle: (value) => { idle = value; } };
+  return { startup, connected, statuses, discovery, setIdle: (value) => { idle = value; } };
 }
 
 test("an available saved device connects immediately without a timer", async () => {
   const device = {host:"192.168.1.10", reachable:true, lastConnected:123};
   const h = harness([device]);
   await h.startup.start();
-  assert.deepEqual(h.connected, [device]); assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.connected, [device]);
 });
 
-test("first new device waits five seconds and is rechecked before connection", async () => {
+test("the first verified device connects immediately without a countdown or second probe", async () => {
   const first = {host:"192.168.1.10", reachable:true}, second = {host:"192.168.1.11", reachable:true};
   const h = harness([first, second]);
+  h.discovery.probe = () => { throw new Error("already verified; no second probe needed"); };
   await h.startup.start();
-  assert.equal(h.connected.length, 0); assert.equal(h.timers.size, 1);
-  const timer = [...h.timers.values()][0]; assert.equal(timer.delay, 5000);
-  await timer.callback(); assert.deepEqual(h.connected, [first]);
+  assert.deepEqual(h.connected, [first]);
+  assert.equal(h.statuses.some(([state]) => state === "waiting"), false);
 });
 
-test("a saved device takes priority over a pending new-device countdown", async () => {
+test("saved history cannot displace the first device found on this network", async () => {
   const saved = {host:"192.168.1.11", reachable:true, lastConnected:123};
-  const h = harness([{host:"comma.local", reachable:true}, saved]);
+  const first = {host:"192.168.2.10", reachable:true};
+  const h = harness([first, saved]);
   await h.startup.start();
-  assert.deepEqual(h.connected, [saved]); assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.connected, [first]);
 });
 
-test("cancel, demo/manual busy state and disappearing devices prevent auto-connect", async () => {
-  for (const action of ["cancel", "busy", "disappeared"]) {
-    const h = harness([{host:"comma.local", reachable:true}]);
-    await h.startup.start(); const timer = [...h.timers.values()][0];
+test("cancel and demo/manual busy state prevent a late scan result from connecting", async () => {
+  for (const action of ["cancel", "busy"]) {
+    const h = harness([]);
+    let publish, finish;
+    h.discovery.scan = ({ onReachable }) => { publish = onReachable; return new Promise((resolve) => { finish = resolve; }); };
+    const scanning = h.startup.start();
+    await new Promise((resolve) => setImmediate(resolve));
     if (action === "cancel") h.startup.cancel();
     if (action === "busy") h.setIdle(false);
-    if (action === "disappeared") h.discovery.probe = async () => false;
-    await timer.callback(); assert.equal(h.connected.length, 0);
+    publish({host:"192.168.1.10", reachable:true}); finish([]);
+    await scanning; assert.equal(h.connected.length, 0);
   }
+});
+
+test("hidden current subnet is explained without asking to clear data or change permissions", async () => {
+  const h = harness([]);
+  h.discovery.lastScan = { currentSubnets: [], hiddenLocalAddresses: true };
+  await h.startup.start();
+  assert.match(h.statuses.at(-1)[1], /Wi-Fi subnet hidden/);
 });
 
 test("denied permission never scans; prompt or unsupported query attempts local discovery", async () => {

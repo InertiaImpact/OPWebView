@@ -27,7 +27,7 @@ export class DemoFeed {
     const lanes = [-5.4, -1.8, 1.8, 5.4].map((offset) => ({ x, y: curve(offset), z: zero }));
     const edges = [-7.4, 7.4].map((offset) => ({ x, y: curve(offset), z: zero }));
     const messages = [
-      { type: "deviceState", data: { deviceType: "mici", started: true, cpuTempC: [54, 58, 61, 57], memoryUsagePercent: 46, freeSpacePercent: 72, networkStrength: "great", powerDrawW: 6.2 } },
+      { type: "deviceState", data: { deviceType: "mici", started: true, cpuTempC: [54, 58, 61, 57], memoryUsagePercent: 46, freeSpacePercent: 72, networkType: elapsed % 30 < 15 ? "wifi" : "cell4G", networkStrength: "great", powerDrawW: 12.5 } },
       { type: "roadCameraState", data: { sensor: "ox03c10" } },
       { type: "liveCalibration", data: { rpyCalib: [0, 0.018, 0], wideFromDeviceEuler: [0, 0, 0], calStatus: "calibrated", calPerc: 100, height: [1.22] } },
       { type: "carState", data: { vEgo: speed, vEgoCluster: speed, vCruiseCluster: 105, aEgo: Math.sin(elapsed) * 0.2, steeringAngleDeg: Math.sin(elapsed * 0.7) * 8, steeringRateDeg: Math.cos(elapsed * 0.7) * 4, steeringTorque: Math.sin(elapsed) * 0.6, gearShifter: "drive", cruiseState: { enabled: true }, leftBlinker: false, rightBlinker: false } },
