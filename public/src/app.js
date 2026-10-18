@@ -6,7 +6,7 @@ import { ConnectionManager } from "./core/connection-manager.js?v=6";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=4";
-import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=7";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=8";
 import { ViewportController } from "./core/viewport-controller.js";
 import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=4";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";

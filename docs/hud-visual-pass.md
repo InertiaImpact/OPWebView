@@ -13,6 +13,8 @@ The pinned Enhanced, Detailed, top-row, HUD, camera-transform and model-renderer
 
 ## Window and lifecycle behavior
 
+Dev lead boxes restore rx-wb-stg's 1.52 m radar-to-camera distance offset for projection only. Their nearest/rear face anchors at the corrected track point, with a generic 4.5 m length extending forward (1.8 m wide, 1.5 m tall). Distance labels and telemetry remain unchanged. These are illustrative vehicle-sized boxes, not measured vehicle bounds; calibration, track error, and video/telemetry timing can still affect alignment. Source convention: [rx-wb-stg radard](https://github.com/gerrylum/openpilot/blob/rx-wb-stg/openpilot/selfdrive/controls/radard.py).
+
 - Normal page: full chosen layout. Fullscreen, orientation, visual-viewport resize and foreground return refresh widget geometry and canvas resolution.
 - Width below 480 px or height below 240 px: temporary speed + torque presentation, with the expensive road overlay disabled.
 - Width below 220 px or height below 140 px: camera only.

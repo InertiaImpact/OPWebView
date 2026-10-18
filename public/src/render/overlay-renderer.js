@@ -1,7 +1,9 @@
 import {
   HEIGHT_INIT,
+  RADAR_TO_CAMERA,
   calculateFrameTransform,
   lineToPolygon,
+  leadBoxVertices,
   pathLengthIndex,
   projectPoint
 } from "./projection.js";
@@ -247,11 +249,11 @@ export class OverlayRenderer {
 
   drawReticle(lead, matrix, clip, pathHeight, state, tag) {
     const d = Number(lead.dRel) || 0, rel = Number(lead.vRel) || 0;
-    if (d <= 0) return;
-    const zGround = (state.pathZ[pathLengthIndex(state.pathX, d)] || 0) + pathHeight;
-    const corners = [[-1,1],[1,1],[1,0],[-1,0]];
-    const face = (depth) => corners.map(([y,z]) => projectPoint(matrix, [d + depth, -(Number(lead.yRel) || 0) + y * .9, zGround - z * 1.5], clip));
-    const near = face(0), far = face(1.8);
+    const zGround = (state.pathZ[pathLengthIndex(state.pathX, d + RADAR_TO_CAMERA)] || 0) + pathHeight;
+    const box = leadBoxVertices(d, Number(lead.yRel) || 0, zGround);
+    if (!box) return;
+    const near = box.rear.map((p) => projectPoint(matrix, p, clip));
+    const far = box.front.map((p) => projectPoint(matrix, p, clip));
     if ([...near,...far].some((p) => !p)) return;
     const color = leadWarningColor(d, rel);
     const ctx = this.context;
