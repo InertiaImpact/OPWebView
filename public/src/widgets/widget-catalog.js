@@ -9,7 +9,7 @@ import {
   speedLimitToShow,
   steeringMode,
   torqueBarValue
-} from "../core/state.js?v=3";
+} from "../core/state.js?v=4";
 import { torqueGraph, traceGraph, confidenceGraph } from "./widget-graphs.js";
 
 const dash = "–";

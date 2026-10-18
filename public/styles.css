@@ -125,8 +125,8 @@ button { color: inherit; }
 }
 
 .app[data-drive-state="engaged"] { --frame: #17a35a; }
-.app[data-drive-state="override"] { --frame: #9ca4a0; }
-.app[data-drive-state="latOnly"] { --frame: #4d9dff; }
+.app[data-drive-state="override"] { --frame: #89928d; }
+.app[data-drive-state="latOnly"] { --frame: #00c8c8; }
 .app[data-drive-state="longOnly"] { --frame: #961ca8; }
 
 

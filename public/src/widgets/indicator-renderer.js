@@ -1,5 +1,5 @@
 import { torqueGraph, torquePresentation, confidenceGraph, confidencePresentation } from "./widget-graphs.js";
-import { torqueBarValue } from "../core/state.js?v=3";
+import { torqueBarValue } from "../core/state.js?v=4";
 
 const attr = (node, name, value) => {
   const text = String(value);

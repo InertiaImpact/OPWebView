@@ -6,6 +6,10 @@ The browser understands the retained slim payload fields, including `carOutput.a
 
 DEV now adds a presentation-only 0.1-second torque filter, as on the comma, and short interpolation of the already-filtered confidence value. These two SVGs animate up to 30 fps independently of the lower-rate text/graph paints. Animation pauses in the background/native video PiP, does not integrate time spent hidden, and stops at a settled value. Raw telemetry and trace history remain unchanged. Nonzero torque at the stream's minimum resolution (0.001) is no longer discarded by the drawing threshold.
 
+## MADS status colors
+
+Verified against the same rx-wb-stg revision on 2026-10-18: steering-only is cyan (`#00c8c8`), cruise-only purple (`#961ca8`), and override gray (`#89928d`). DEV also follows native override precedence, including longitudinal override events and paused MADS. Angle/torque indicator colors and preset engaged/disengaged styling are unchanged. Sources: [status selection](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/selfdrive/ui/sunnypilot/ui_state.py), [MADS colors](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/selfdrive/ui/sunnypilot/onroad/augmented_road_view.py), [override color](https://github.com/gerrylum/openpilot/blob/7dd9234ae5e879684104cd6c24497b9c925fe69a/openpilot/selfdrive/ui/onroad/augmented_road_view.py).
+
 ## Remaining upstream precision limitation
 
 `opview_slim.py` rounds **all** floats to three decimal places, including `controlsState.curvature` and `desiredCurvature`. For example, at 25 m/s, a desired curvature of 0.0004 represents 0.25 m/s² lateral acceleration (about 8.3% on the default 3 m/s² scale), but becomes 0.000 on the wire. The next 0.001 step represents about 20.8% of that scale. That can erase gentle angle/curvature steering effort and make both the web and native OPView estimate step abruptly. Smoothing cannot restore missing precision; DEV does not invent a nonzero value.

@@ -437,7 +437,9 @@ function updateDriveStatus(state) {
   const override = ["preEnabled", "overriding"].includes(state.openpilotState);
   if (!state.madsSeen) {
     state.status = override ? "override" : state.enabled ? "engaged" : "disengaged";
-  } else if (state.openpilotState === "preEnabled" || state.madsState === "paused" || state.madsState === "overriding") {
+  } else if (state.openpilotState === "preEnabled"
+    || (state.openpilotState === "overriding" && (!state.madsAvailable || state.overrideLongitudinal))
+    || state.madsState === "paused" || state.madsState === "overriding") {
     state.status = "override";
   } else if (!state.madsAvailable) {
     state.status = state.enabled ? "engaged" : "disengaged";
