@@ -1,11 +1,11 @@
 const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
 const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
-const CACHE_VERSION = 37;
+const CACHE_VERSION = 38;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=15",
+  "./styles.css?v=16",
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",

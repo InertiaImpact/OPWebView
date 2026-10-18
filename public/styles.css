@@ -270,8 +270,8 @@ button { color: inherit; }
 }
 .data-row span { color: #a6a6a6; font-size: clamp(6px, 1.05vmin, 13px); font-weight: 650; white-space: nowrap; }
 .data-row strong { overflow: hidden; font-size: clamp(8px, 1.55vmin, 18px); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.data-row strong.angle { color: #4d9dff; }
-.data-row strong.torque { color: #ff9a3c; }
+.data-row strong.angle { color: #3adb6d; }
+.data-row strong.torque { color: #4d9dff; }
 .data-row strong.good { color: #3adb6d; }
 .data-row strong.warn { color: #ff9a3c; }
 .data-row strong.dim { color: #777; }

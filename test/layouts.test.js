@@ -1,7 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { BUILT_IN_LAYOUTS, createPresetLayout, sanitizeLayoutName } from "../public/src/widgets/layout-presets.js";
 import { WIDGETS } from "../public/src/widgets/widget-catalog.js";
+
+test("steering mode labels use green angle and blue torque in both steering widgets", async () => {
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.data-row strong\.angle\s*\{\s*color: #3adb6d;/);
+  assert.match(css, /\.data-row strong\.torque\s*\{\s*color: #4d9dff;/);
+  for (const id of ["steering", "detailedSteering"]) {
+    const widget = WIDGETS.find((item) => item.id === id);
+    for (const mode of ["angle", "torque"]) {
+      const html = widget.render({ latActive: true, lateralMode: mode, history: [] });
+      assert.ok(html.includes(`class="${mode}">${mode.toUpperCase()}</strong>`));
+    }
+  }
+});
 
 test("ships Classic, Enhanced, and Detailed OPView presets", () => {
   assert.deepEqual(Object.keys(BUILT_IN_LAYOUTS), ["classic", "enhanced", "detailed"]);
