@@ -18,7 +18,7 @@ Features:
 - A no-hardware demo mode for validating the layout and renderer
 - A GitHub Pages deployment workflow
 
-Use [stable](https://inertiaimpact.github.io/OPWebView/) for released features or [dev](https://inertiaimpact.github.io/OPWebView/dev/) for the latest changes. Dev adds automatic discovery/reconnection, floating device controls, collapsible overlay editing menus, double-tap fullscreen, and safer saved-data migration. These changes are not yet all promoted to `main`.
+Use [stable](https://inertiaimpact.github.io/OPWebView/) for released features or [dev](https://inertiaimpact.github.io/OPWebView/dev/) for upcoming changes. Both include automatic discovery/reconnection, floating device controls, overlay editing menus, double-tap fullscreen, and saved-data migration. Dev additionally tests a labeled camera snapshot/fade during handoffs and faster same-session rediscovery.
 
 The presets use OPView's reference sizing rather than stretching corner widgets with the window. Detailed includes live ten-second acceleration graphs and folding panels. Small page windows temporarily show speed and torque only; standard video Picture-in-Picture stays camera-only. The full chosen layout restores on return. See [the visual/resize verification notes](docs/hud-visual-pass.md) for reference details, test coverage and Android limitations.
 

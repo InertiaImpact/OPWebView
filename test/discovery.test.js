@@ -17,6 +17,20 @@ test("subnet scans exclude network and broadcast addresses", () => {
   assert.equal(hosts.at(-1), "192.168.143.254");
 });
 
+test("session-only verified hints lead their current subnet without delaying other probes", async () => {
+  const discovery = scanner(), checked=[];
+  discovery.lastReachable = {host:"192.168.138.233"};
+  discovery.probe = async device => { checked.push(device.host); return false; };
+  await discovery.scan();
+  const ips=checked.filter(host=>host!=="comma.local");
+  assert.equal(ips[0],"192.168.138.233"); assert.equal(new Set(ips).size,254);
+  assert.equal(ips.length,254,"a missing hint does not add duplicate requests");
+  discovery.lastReachable = {host:"192.168.99.233"}; checked.length=0;
+  await discovery.scan();
+  assert.equal(checked.includes("192.168.99.233"),false,"old subnet is never probed");
+  assert.equal(checked.filter(host=>host!=="comma.local")[0],"192.168.138.1");
+});
+
 const scanner = (prefixes = ["192.168.138"]) => {
   const discovery = new DeviceDiscovery({ getItem() { throw new Error("must not read saved IPs"); } });
   discovery.saved = () => { throw new Error("discovery must not consult historical devices"); };

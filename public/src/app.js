@@ -1,18 +1,19 @@
 import { TelemetryStore } from "./core/state.js?v=3";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
-import { DeviceDiscovery } from "./core/device-discovery.js?v=4";
+import { DeviceDiscovery } from "./core/device-discovery.js?v=5";
 import { WebRTCTransport } from "./core/webrtc-transport.js?v=6";
-import { ConnectionManager } from "./core/connection-manager.js?v=5";
+import { ConnectionManager } from "./core/connection-manager.js?v=6";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=4";
-import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=6";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=7";
 import { ViewportController } from "./core/viewport-controller.js";
-import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=3";
+import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=4";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
 import { DevWatermark } from "./core/dev-watermark.js";
 import { installLayoutGesture } from "./core/layout-gesture.js";
 import { installPanelDrag } from "./core/movable-panel.js";
+import { CameraTransition } from "./core/camera-transition.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -78,6 +79,8 @@ const discovery = new DeviceDiscovery();
 const transport = new WebRTCTransport(elements.video);
 const connection = new ConnectionManager({ store, transport, adapter, discovery });
 const renderer = new OverlayRenderer(elements.canvas, store, elements.video);
+const cameraTransition = new CameraTransition({ root: elements.app, video: elements.video,
+  overlay: elements.canvas, canvas: $("#camera-snapshot"), label: $("#camera-switch-status") });
 const widgets = new WidgetManager({
   layer: elements.widgetLayer,
   toggles: elements.widgetToggles,
@@ -166,7 +169,7 @@ function syncDevicePanel() {
 }
 
 function openConnectionDialog() {
-  startup.cancel();
+  startup.pause();
   refreshNetworkPermission();
   elements.connectionError.hidden = true;
   elements.connectionError.dataset.kind = "error";
@@ -290,6 +293,7 @@ async function connectDevice(input, { automatic = false } = {}) {
 
 function startDemo() {
   startup.cancel();
+  cameraTransition.clear();
   connection.disconnect().catch(() => {});
   demoActive = true;
   elements.app.classList.add("demo-active");
@@ -433,7 +437,7 @@ elements.connectionForm.addEventListener("submit", (event) => {
 });
 elements.connect.addEventListener("click", openConnectionDialog);
 elements.discover.addEventListener("click", async () => {
-  if (!streamBusy() && !demoActive) { await startup.start(); return; }
+  if (!streamBusy() && !demoActive) { await startup.start({ manual: true }); return; }
   startup.cancel();
   elements.discover.disabled = true;
   elements.discover.textContent = "Scanning…";
@@ -449,7 +453,7 @@ elements.discover.addEventListener("click", async () => {
   }
 });
 elements.startupCancel.addEventListener("click", () => {
-  startup.cancel();
+  startup.pause();
   showToast("Automatic connection cancelled. Use Connect when ready.");
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden) startup.cancel(); });
@@ -611,11 +615,14 @@ function handleConnectionState(state) {
 }
 connection.addEventListener("state", (event) => handleConnectionState(event.detail));
 connection.addEventListener("connected", (event) => {
+  discovery.lastReachable = event.detail;
   if (!transport.staleServices.length) elements.streamHealth.hidden = true;
   renderDevices([{ ...event.detail, reachable: true }, ...listedDevices.filter((device) => device.authority !== event.detail.authority)]);
 });
 connection.addEventListener("video", () => {
   if (demoActive) return;
+  elements.app.classList.add("video-ready");
+  cameraTransition.finish();
   if (elements.connectionDialog.open) elements.connectionDialog.close();
   elements.connectionError.hidden = true;
   if (!store.state.isConnected) {
@@ -626,6 +633,7 @@ connection.addEventListener("video", () => {
   syncDevicePanel();
 });
 connection.addEventListener("error", (event) => {
+  cameraTransition.clear();
   if (demoActive || connection.userClosed) return;
   const error = event.detail;
   diagnostics.add(connection.retryTimer ? "warn" : "error", "connection", error.message || "Connection failed", error);
@@ -673,7 +681,21 @@ document.addEventListener("visibilitychange", () => {
     transport.resumeTelemetryHealth();
     refreshNetworkPermission();
     checkForUpdates();
+    resumeDiscovery();
   }
+});
+
+function resumeDiscovery() {
+  if (!elements.connectionDialog.open && !elements.diagnosticsDialog.open && !connection.userClosed) void startup.start();
+}
+window.addEventListener("pageshow", resumeDiscovery);
+window.addEventListener("online", resumeDiscovery);
+navigator.connection?.addEventListener("change", () => {
+  if (!streamBusy() && !demoActive) { startup.cancel(); resumeDiscovery(); }
+});
+connection.addEventListener("handoff", () => cameraTransition.start());
+connection.addEventListener("state", (event) => {
+  if (["disconnected", "offline"].includes(event.detail)) cameraTransition.clear();
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -764,7 +786,7 @@ if ("serviceWorker" in navigator) {
 renderDevices([]);
 diagnostics.add("info", "app", "Application started", { build: APP_BUILD });
 refreshNetworkPermission();
-window.addEventListener("load", () => startup.start(), { once: true });
+void startup.start();
 elements.layoutLabel.textContent = widgets.activeLabel();
 syncDevicePanel();
 updateUi();

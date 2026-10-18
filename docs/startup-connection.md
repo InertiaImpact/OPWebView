@@ -1,5 +1,9 @@
 # Startup discovery and fullscreen (DEV)
 
+On dev, discovery starts as soon as the app module is ready and restarts when an idle page returns to the foreground or its network changes. Cancel pauses automatic discovery until **Scan network** is selected. Manual IP entry also pauses it. Scans prioritize the last verified address from this open page only when it belongs to the freshly detected current subnet; no history is saved or old subnets scanned.
+
+Camera handoffs keep one size-limited snapshot of the previous video/overlay, visibly labeled **Switching camera…**, then fade it out after the new camera supplies a playable frame. Failure or disconnect clears it. This masks renegotiation without opening a second device stream or changing telemetry readiness requirements; actual negotiation time still depends on the comma and network.
+
 On each load, DEV checks the browser's `local-network` permission (with `local-network-access` fallback). If denied, it explains how to allow access in site settings; webpages cannot override a denial. For prompt/unknown states, the local schema fetch attempts to trigger the browser's permission prompt. If the browser requires interaction, use **Scan network** in the floating left device panel. The **+** button opens manual IP entry without automatically focusing the input.
 
 ## Floating controls

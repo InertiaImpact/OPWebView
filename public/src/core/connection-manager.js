@@ -59,6 +59,7 @@ export class ConnectionManager extends EventTarget {
     this.userClosed = false;
     this.connecting = true;
     const switching = camera !== this.streamType;
+    if (switching) this.dispatchEvent(new CustomEvent("handoff"));
     this.streamType = camera;
     clearTimeout(this.retryTimer);
     this.retryTimer = null;

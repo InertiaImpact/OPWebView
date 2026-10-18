@@ -107,6 +107,12 @@ button { color: inherit; }
   z-index: 2;
 }
 
+#camera-snapshot { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; opacity: 1; transition: opacity 160ms ease; }
+#camera-snapshot.camera-snapshot-fade { opacity: 0; }
+.camera-switching #model-overlay { visibility: hidden; }
+.app:is(.camera-switching,.camera-handoff-fading) #road-video { transition: none; }
+@media (prefers-reduced-motion: reduce) { #camera-snapshot { transition: none; } }
+
 .engagement-frame {
   position: absolute;
   inset: max(10px, 1.6vmin);

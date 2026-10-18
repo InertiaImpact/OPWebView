@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=18" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
@@ -68,6 +68,8 @@
         <div class="video-backdrop" aria-hidden="true"></div>
         <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
         <canvas id="model-overlay" aria-label="Telemetry overlay"></canvas>
+        <canvas id="camera-snapshot" aria-hidden="true" hidden></canvas>
+        <p id="camera-switch-status" class="stream-health" role="status" hidden>Switching camera…</p>
         <div id="engagement-frame" class="engagement-frame" aria-hidden="true"></div>
 
         <section id="widget-layer" class="widget-layer" aria-label="Dashboard widgets"></section>
@@ -161,6 +163,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=26"></script>
+    <script type="module" src="./src/app.js?v=27"></script>
   </body>
 </html>

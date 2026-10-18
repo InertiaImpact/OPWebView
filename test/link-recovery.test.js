@@ -109,8 +109,9 @@ test("playable camera hides connection UI while data is pending; terminal backgr
   const source = app.match(/connection\.addEventListener\("connected", \(event\) => \{[\s\S]*?(?=\nconnection\.addEventListener\("diagnostic")/)[0];
   const handlers = {}, entries = [], rendered = [];
   const context = { demoActive: false, devicePanelOpen: true, listedDevices: [],
+    discovery: {}, cameraTransition: { finish() {}, clear() {} },
     store: { state: { isConnected: false } }, transport: { staleServices: [] },
-    elements: { connectionDialog: { open: true, close() { this.open = false; } },
+    elements: { app: { classList: { add() {} } }, connectionDialog: { open: true, close() { this.open = false; } },
       connectionError: { hidden: false }, streamHealth: { hidden: true } },
     connection: { userClosed: false, retryTimer: null, addEventListener(type, callback) { handlers[type] = callback; } },
     diagnostics: { add(...args) { entries.push(args); } },
