@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
     <title>OP WebView DEV</title>
     <style>
       .dev-watermark {
@@ -102,24 +102,23 @@
       <form id="connection-form" method="dialog">
         <header class="dialog-header">
           <div>
-            <span class="eyebrow">MANUAL CONNECTION</span>
             <h2>Add a comma</h2>
           </div>
           <button class="close-button" value="cancel" formnovalidate aria-label="Close">×</button>
         </header>
-        <p class="dialog-copy">Your device must be on the same network with <code>webrtcd</code> reachable on port 5001.</p>
+        <p class="dialog-copy">Same Wi-Fi. Enter the comma IP.</p>
         <p id="network-permission-status" class="dialog-copy" aria-live="polite"></p>
 
-        <label class="field-label" for="device-host">Hostname or local IP</label>
+        <label class="field-label" for="device-host">Comma IP or hostname</label>
         <div class="host-row">
           <input id="device-host" name="host" inputmode="url" autocomplete="url" placeholder="192.168.0.10 or comma.local" required />
           <button id="connect-submit" class="primary-button" value="default" type="submit">Connect</button>
         </div>
-        <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">View diagnostic log + QR</button>
+        <button id="connection-diagnostics-button" type="button" class="text-button diagnostic-link">Logs + QR</button>
 
         <details class="compatibility-note">
-          <summary>Browser connection requirements</summary>
-          <p>Chrome will request local-network access. The comma must be onroad with OPView enabled so <code>webrtcd</code> is running. The endpoint must also allow this page’s origin with CORS.</p>
+          <summary>Connection help</summary>
+          <p>Use the same Wi-Fi, enable OPView on the comma, and allow local-network access. The comma's streaming service must accept browser requests.</p>
         </details>
       </form>
     </dialog>
@@ -162,6 +161,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=24"></script>
+    <script type="module" src="./src/app.js?v=25"></script>
   </body>
 </html>

@@ -30,12 +30,12 @@ export class StartupConnection {
       if (!current()) return;
       if (permission === "denied") {
         this.running = false;
-        this.status("permission", "Local-network access is blocked. Allow it in this site's browser settings, then tap Scan network.");
+        this.status("permission", "Network access blocked. Allow it in Chrome settings, then scan.");
         return;
       }
       // A local fetch is the permission request: there is no web Permissions
       // API request() method. Denied grants must be changed by the user.
-      this.status("scanning", "Scanning for your comma… Allow local-network access if prompted.");
+      this.status("scanning", "Finding comma… Allow network access if asked.");
       const connect = async (device) => {
         if (!current()) return;
         this.running = false;
@@ -44,7 +44,7 @@ export class StartupConnection {
         try {
           const success = await this.connect(device);
           if (generation === this.generation) this.status(success === false ? "not-found" : "idle",
-            success === false ? "Automatic connection failed. Use Connect or Scan network to retry." : "");
+            success === false ? "Couldn't connect. Tap Scan to retry." : "");
         } catch (error) {
           if (generation === this.generation) this.status("not-found", `Connection failed: ${error.message}`);
         }
@@ -61,10 +61,10 @@ export class StartupConnection {
         const state = await this.permission();
         if (generation !== this.generation) return;
         this.status(state === "denied" || state === "prompt" ? "permission" : "not-found",
-          state === "denied" ? "Local-network access is blocked. Allow it in this site's browser settings."
+          state === "denied" ? "Network access blocked. Allow it in Chrome settings."
             : this.discovery.lastScan?.hiddenLocalAddresses && !this.discovery.lastScan?.currentSubnets.length
-              ? "The browser did not expose this Wi-Fi subnet. Use + to enter the comma's current IP address."
-              : "No comma found on the current network. Tap Scan network to retry, or + to enter its current IP address.");
+              ? "Wi-Fi subnet hidden. Use + to enter the comma IP."
+              : "No comma found. Tap Scan, or + to add its IP.");
       }
     } catch (error) {
       if (generation !== this.generation) return;

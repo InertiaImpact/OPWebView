@@ -262,7 +262,17 @@ export class WebRTCTransport extends EventTarget {
       await delay(100);
     }
     if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
-    throw new Error(await describeReadinessFailure(this.peer, this.channel, this.readiness));
+    const readiness = { ...this.readiness };
+    const missing = LIVE_SERVICES.filter((type) => performance.now() - (this.lastTelemetry.get(type) ?? -Infinity) > TELEMETRY_STALE_MS);
+    const message = await describeReadinessFailure(this.peer, this.channel, readiness);
+    if (generation !== this.generation) throw new Error("The connection attempt was cancelled.");
+    const error = new Error(message);
+    // A playable camera with an open data channel can precede modelV2 while
+    // openpilot's driving model is still starting. Replacing that session is
+    // safe and bounded by ConnectionManager's normal retry limit.
+    error.retryable = readiness.videoReady && readiness.dataChannelOpen && !readiness.dataReceived;
+    if (error.retryable) error.cause = new Error(`Missing or stale telemetry: ${missing.join(", ")}`);
+    throw error;
   }
 
   send(type, data) {
@@ -319,7 +329,7 @@ export function readinessFailureMessage(readiness, videoStats = {}) {
     return "The telemetry channel opened, but the comma sent neither data nor camera frames. Confirm OpviewEnabled is on, put the comma onroad, and restart webrtcd.";
   }
   if (!readiness.dataReceived) {
-    return "The camera is live, but parsed carState and modelV2 telemetry did not both arrive. Confirm OPView streaming is enabled and check the device's telemetry bridge.";
+    return "Camera live; waiting for carState/modelV2 data.";
   }
   if ((videoStats.packetsReceived || 0) > 0 && (videoStats.framesDecoded || 0) === 0) {
     return "Telemetry is live and camera packets arrived, but this browser could not decode the H.264 video stream.";

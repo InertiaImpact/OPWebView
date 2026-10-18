@@ -60,7 +60,7 @@ test("hidden current subnet is explained without asking to clear data or change 
   const h = harness([]);
   h.discovery.lastScan = { currentSubnets: [], hiddenLocalAddresses: true };
   await h.startup.start();
-  assert.match(h.statuses.at(-1)[1], /browser did not expose this Wi-Fi subnet/);
+  assert.match(h.statuses.at(-1)[1], /Wi-Fi subnet hidden/);
 });
 
 test("denied permission never scans; prompt or unsupported query attempts local discovery", async () => {

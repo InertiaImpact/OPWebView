@@ -28,6 +28,92 @@ test("an initial stream negotiation failure remains visible instead of retrying 
   assert.equal(manager.retryTimer, null);
 });
 
+test("a live camera waiting on model telemetry gets a bounded startup retry", async () => {
+  const error = Object.assign(new Error("model still loading"), { retryable: true });
+  const { manager } = harness(async () => { throw error; });
+  await assert.rejects(manager.connect("192.168.1.10"), /model still loading/);
+  assert.equal(manager.retryCount, 1);
+  assert.notEqual(manager.retryTimer, null);
+  await manager.disconnect();
+});
+
+test("startup telemetry retries stop after the existing three-attempt limit", () => {
+  const { manager } = harness(async () => {});
+  manager.device = { host: "192.168.1.10" };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    manager.scheduleReconnect();
+    clearTimeout(manager.retryTimer);
+    manager.retryTimer = null;
+  }
+  assert.equal(manager.retryCount, 0);
+  assert.equal(manager.retryExhausted, true);
+  manager.scheduleReconnect();
+  assert.equal(manager.retryTimer, null);
+});
+
+test("real retry callbacks stop after three retries, report their decision and allow a new manual attempt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let attempts = 0;
+  const h = harness(async () => {
+    attempts++;
+    h.transport.dispatchEvent(new CustomEvent("state", { detail: "failed" }));
+    throw Object.assign(new Error("modelV2 not ready"), { retryable: true });
+  });
+  const errors = [];
+  h.manager.addEventListener("error", () => errors.push({ retrying: Boolean(h.manager.retryTimer), exhausted: h.manager.retryExhausted }));
+  await assert.rejects(h.manager.connect("192.168.138.233"));
+  assert.equal(h.store.state.isConnected, false);
+  for (let retry = 0; retry < 3; retry++) {
+    t.mock.timers.tick(2000);
+    await settle();
+  }
+  assert.equal(attempts, 4, "initial attempt plus three retries, never an endless loop");
+  assert.equal(h.manager.retryTimer, null); assert.equal(h.manager.retryExhausted, true);
+  assert.deepEqual(errors.map((event) => event.retrying), [true, true, true, false]);
+  assert.equal(errors.at(-1).exhausted, true);
+  h.transport.dispatchEvent(new CustomEvent("state", { detail: "failed" }));
+  t.mock.timers.tick(10000); await settle(); assert.equal(attempts, 4);
+  h.transport.connect = async () => {};
+  await h.manager.connect("192.168.138.233");
+  assert.equal(h.store.state.isConnected, true); assert.equal(h.manager.retryExhausted, false);
+  await h.manager.disconnect();
+});
+
+test("model-startup recovery is cancelled explicitly and cannot reconnect in the background", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let attempts = 0;
+  const h = harness(async () => { attempts++; throw Object.assign(new Error("model loading"), { retryable: true }); });
+  await assert.rejects(h.manager.connect("192.168.138.233"));
+  await h.manager.disconnect();
+  t.mock.timers.tick(10000); await settle();
+  assert.equal(attempts, 1); assert.equal(h.manager.retryTimer, null);
+});
+
+test("late model telemetry completes startup without another negotiation", async () => {
+  const video = { srcObject: null }, transport = new WebRTCTransport(video);
+  transport.readiness.videoReady = transport.readiness.dataChannelOpen = true;
+  transport.markTelemetryReceived(["carState"]);
+  const h = harness(() => transport.waitForStreams(transport.generation, 1000));
+  const attempt = h.manager.connect("192.168.138.233");
+  assert.equal(h.store.state.isConnected, false, "camera alone is not a fully ready session");
+  transport.markTelemetryReceived(["modelV2"]);
+  await attempt;
+  assert.equal(h.store.state.isConnected, true); assert.equal(h.manager.retryTimer, null);
+  await h.manager.disconnect(); await transport.close();
+});
+
+test("readiness diagnostics cannot turn a superseded session into a retryable startup failure", async () => {
+  const transport = new WebRTCTransport({ srcObject: null });
+  transport.readiness.videoReady = transport.readiness.dataChannelOpen = true;
+  let finishStats;
+  transport.peer = { getStats: () => new Promise((resolve) => { finishStats = resolve; }), close() {} };
+  const pending = transport.waitForStreams(transport.generation, 0);
+  const cancelled = assert.rejects(pending, (error) => {
+    assert.match(error.message, /cancelled/); assert.notEqual(error.retryable, true); return true;
+  });
+  await transport.close(); finishStats(new Map()); await cancelled;
+});
+
 test("a stream that drops after becoming healthy still schedules recovery", async () => {
   const { manager, store, transport } = harness(async () => {});
   manager.device = { host: "192.168.1.10" };

@@ -103,3 +103,33 @@ test("recovered connections dismiss stale panel/dialog UI; retries stay unobtrus
   vm.runInContext('handleConnectionState("connected")', context);
   assert.equal(context.devicePanelOpen, false);
 });
+
+test("playable camera hides connection UI while data is pending; terminal background retry errors remain actionable", async () => {
+  const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
+  const source = app.match(/connection\.addEventListener\("connected", \(event\) => \{[\s\S]*?(?=\nconnection\.addEventListener\("diagnostic")/)[0];
+  const handlers = {}, entries = [], rendered = [];
+  const context = { demoActive: false, devicePanelOpen: true, listedDevices: [],
+    store: { state: { isConnected: false } }, transport: { staleServices: [] },
+    elements: { connectionDialog: { open: true, close() { this.open = false; } },
+      connectionError: { hidden: false }, streamHealth: { hidden: true } },
+    connection: { userClosed: false, retryTimer: null, addEventListener(type, callback) { handlers[type] = callback; } },
+    diagnostics: { add(...args) { entries.push(args); } },
+    renderDevices(devices) { rendered.push(devices); }, syncDevicePanel() {} };
+  vm.runInNewContext(source, context);
+  handlers.video();
+  assert.equal(context.elements.connectionDialog.open, false);
+  assert.equal(context.devicePanelOpen, false);
+  assert.equal(context.elements.streamHealth.hidden, false);
+  assert.equal(context.store.state.isConnected, false, "pending model data is not reported as connected");
+  context.connection.retryTimer = 1;
+  const error = Object.assign(new Error("Camera live; waiting for carState/modelV2 data."), { retryable: true });
+  handlers.error({ detail: error });
+  assert.equal(context.devicePanelOpen, false); assert.equal(entries.at(-1)[0], "warn");
+  context.connection.retryTimer = null;
+  handlers.error({ detail: error });
+  assert.equal(context.devicePanelOpen, true);
+  assert.equal(context.elements.connectionError.textContent, "Data not ready. Tap Connect to retry.");
+  assert.equal(context.elements.streamHealth.hidden, true);
+  handlers.connected({ detail: { authority: "192.168.138.233:5001" } });
+  assert.equal(rendered[0][0].reachable, true);
+});
