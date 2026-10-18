@@ -7,6 +7,28 @@ import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
 import { createPresetLayout } from "../public/src/widgets/layout-presets.js";
 
+test("compact editor uses single-row presets/save controls and a touch-sized two-column widget list", async () => {
+  const css=await readFile(new URL("../public/styles.css",import.meta.url),"utf8");
+  const page=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
+  assert.match(css,/\.view-panel \.layout-presets \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css,/\.view-panel \.save-layout-row \{ grid-template-columns: minmax\(0, 1fr\) auto/);
+  assert.match(css,/\.widget-panel \.widget-toggles \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css,/\.widget-panel \.widget-toggle \{ min-height: 36px/);
+  assert.match(css,/@media \(max-width: 600px\) \{\s*\.widget-panel \.widget-toggles \{ grid-template-columns: 1fr/);
+  assert.match(page,/class="editor-actions">\s*<button id="reset-layout-button"[\s\S]*?id="editing-devices-button"/);
+  assert.match(css,/\.floating-panel\.panel-collapsed > :not\(\.dock-header\):not\(#done-editing-button\)/);
+});
+
+test("compact saved-view actions retain full accessible names and bounded visual labels", async () => {
+  const app=await readFile(new URL("../public/src/app.js",import.meta.url),"utf8");
+  const css=await readFile(new URL("../public/styles.css",import.meta.url),"utf8");
+  assert.match(app,/use\.setAttribute\("aria-label", `Recall \$\{name\}`\)/);
+  assert.match(app,/remove\.setAttribute\("aria-label", `Delete \$\{name\}`\)/);
+  assert.match(app,/elements\.layoutLabel\.title = widgets\.activeLabel\(\)/);
+  assert.match(css,/\.view-panel \.dock-header #layout-label \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis/);
+  assert.match(css,/\.view-panel \.saved-layout-row strong \{[^}]*text-overflow: ellipsis/);
+});
+
 test("one Devices control moves between the open header and collapsed pill and hides when connected", async () => {
   const app = await readFile(new URL("../public/src/app.js", import.meta.url), "utf8");
   const page = await readFile(new URL("../public/index.html", import.meta.url), "utf8");

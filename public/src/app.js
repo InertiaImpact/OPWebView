@@ -6,7 +6,7 @@ import { ConnectionManager } from "./core/connection-manager.js?v=6";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=4";
-import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=10";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=11";
 import { ViewportController } from "./core/viewport-controller.js";
 import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=4";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
@@ -366,7 +366,7 @@ function renderLayoutDialog() {
   if (!Object.keys(saved).length) {
     const empty = document.createElement("p");
     empty.className = "saved-layout-empty";
-    empty.textContent = "No custom layouts saved yet.";
+    empty.textContent = "No saved views";
     elements.savedLayouts.append(empty);
   }
   for (const name of Object.keys(saved).sort((a, b) => a.localeCompare(b))) {
@@ -374,9 +374,11 @@ function renderLayoutDialog() {
     row.className = "saved-layout-row";
     const label = document.createElement("strong");
     label.textContent = name;
+    label.title = name;
     const use = document.createElement("button");
     use.type = "button";
-    use.textContent = "Recall";
+    use.textContent = "Use";
+    use.setAttribute("aria-label", `Recall ${name}`);
     use.addEventListener("click", () => {
       widgets.applyNamed(name);
       renderLayoutDialog();
@@ -385,7 +387,9 @@ function renderLayoutDialog() {
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "danger-button";
-    remove.textContent = "Delete";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Delete ${name}`);
+    remove.title = `Delete ${name}`;
     remove.addEventListener("click", () => {
       widgets.deleteNamed(name);
       renderLayoutDialog();
@@ -394,6 +398,7 @@ function renderLayoutDialog() {
     elements.savedLayouts.append(row);
   }
   elements.layoutLabel.textContent = widgets.activeLabel();
+  elements.layoutLabel.title = widgets.activeLabel();
 }
 
 function toggleEditing(force) {

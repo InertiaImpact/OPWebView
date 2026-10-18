@@ -8,6 +8,8 @@ On each load, DEV checks the browser's `local-network` permission (with `local-n
 
 ## Floating controls
 
+Dev editing panels use a single-row preset selector/save form, compact saved-view actions, and a two-column widget list on landscape/tablet screens (one column on narrow screens). Headers remain draggable/collapsible, and the panels never resize the dashboard underneath. Saved names stay accessible through full labels/tooltips even when visually shortened.
+
 - The responsive device panel replaces the toolbar/welcome screen. Only devices positively identified on the current network are listed, including the connected device when reopened. `comma.local` is checked alongside IP scanning and listed only if it responds. **Demo** hides when a device is found.
 - A device/wireless icon and **Devices** label toggle the panel: integrated into its open header, or a compact top-left pill when collapsed. **Tools** holds logs, fullscreen and installation. A successful connection hides both the panel and its launcher; reopen **Devices / logs** from the editing Views menu.
 - Long-press the full dashboard for 700 ms to edit. Drag widgets by their title bars and resize with their bottom-right handles. Views/saved layouts float left; widget checkboxes float right. Drag either menu by its header (or focus the header and use arrow keys), or collapse it to reach widgets underneath. Menus stay inside the viewport and do not resize the layout; their positions last only for this session. **Done** stays accessible.
