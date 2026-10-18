@@ -1,6 +1,6 @@
 const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
 const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
-const CACHE_VERSION = 41;
+const CACHE_VERSION = 42;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
@@ -9,7 +9,7 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",
-  "./src/app.js?v=28",
+  "./src/app.js?v=29",
   "./src/core/app-channel.js",
   "./src/demo.js?v=4",
   "./src/core/state.js?v=3",
@@ -19,7 +19,7 @@ const APP_SHELL = [
   "./src/core/storage.js",
   "./src/core/webrtc-transport.js?v=6",
   "./src/core/connection-manager.js?v=6",
-  "./src/core/diagnostic-log.js?v=8",
+  "./src/core/diagnostic-log.js?v=9",
   "./src/core/camera-transition.js",
   "./src/core/viewport-controller.js",
   "./src/core/startup-connection.js?v=4",

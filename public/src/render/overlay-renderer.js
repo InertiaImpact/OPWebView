@@ -211,7 +211,6 @@ export class OverlayRenderer {
 
   drawLeads(matrix, clip, content, pathHeight, state) {
     if (state.hudLayout !== "classic") {
-      if (state.status === "disengaged") return;
       const one = leadPresent(state.leadOne) ? state.leadOne : null;
       if (one) this.drawReticle(one, matrix, clip, pathHeight, state, true);
       if (leadPresent(state.leadTwo) && (!one || Math.abs(state.leadTwo.dRel - one.dRel) > 3)) this.drawReticle(state.leadTwo, matrix, clip, pathHeight, state, !one);

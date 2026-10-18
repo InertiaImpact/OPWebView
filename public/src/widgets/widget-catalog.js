@@ -36,7 +36,7 @@ function driveLabel(state) {
 }
 
 function leadValues(state) {
-  const lead = state.status === "disengaged" ? null : activeLead(state);
+  const lead = activeLead(state);
   if (!lead) return null;
   const distance = Number(lead.dRel) || 0;
   const relative = Number(lead.vRel) || 0;

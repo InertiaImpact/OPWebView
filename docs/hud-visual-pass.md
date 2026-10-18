@@ -10,6 +10,7 @@ The pinned Enhanced, Detailed, top-row, HUD, camera-transform and model-renderer
 - Detailed: the shared Enhanced HUD plus clock/device grid, folding steering/driver/longitudinal/lead panels, lateral-acceleration and acceleration histories (ten seconds), and bottom status chips. Side columns shrink together to fit short screens.
 - Text uses Roboto when available (including Android), with Arial fallback. Camera video and projected overlays share calibration, crop, zoom and horizon offset.
 - Custom layouts remain percentage-based and locally saved. Recalling a preset uses current source geometry; viewport changes do not modify saved custom arrangements.
+- On dev, valid lead tracks and lead readouts remain visible while disengaged. Engagement is not a lead-visibility condition; absent tracks still show no box and unavailable readouts.
 
 ## Window and lifecycle behavior
 
