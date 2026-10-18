@@ -7,7 +7,7 @@ import {
   pathLengthIndex,
   projectPoint
 } from "./projection.js";
-import { leadWarningColor } from "../core/state.js?v=3";
+import { leadWarningColor, leadMotion } from "../core/state.js?v=3";
 
 const MIN_DRAW_DISTANCE = 10;
 const MAX_DRAW_DISTANCE = 100;
@@ -16,6 +16,16 @@ const CLIP_MARGIN = 500;
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const leadPresent = (lead) => Boolean(lead && (lead.status === true || lead.present === true));
 const sameInputs = (a, b) => a?.length === b.length && b.every((value, index) => Object.is(value, a[index]));
+
+function drawLeadLabel(ctx, text, x, y, font, color, width, alpha = 1) {
+  ctx.font = `bold ${font}px Roboto, Arial, sans-serif`;
+  const w = ctx.measureText(text).width + font * 1.1, h = font * 1.4;
+  const center = clamp(x, w / 2 + 4, width - w / 2 - 4);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(20,20,20,.75)"; ctx.beginPath(); ctx.roundRect(center-w/2,y,w,h,h*.3); ctx.fill();
+  ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text,center,y+h/2);
+  ctx.globalAlpha = 1;
+}
 
 export function overlayInputs(state) {
   return [state, state.pathX, state.pathY, state.pathZ,
@@ -72,6 +82,7 @@ export class OverlayRenderer {
     if (this.presentation === mode && this.suspended === suspended) return;
     this.presentation = mode;
     this.suspended = suspended;
+    if (suspended || mode !== "full") this.impactLabel = null;
     if (this.pending) cancelAnimationFrame(this.pending);
     this.pending = null;
     if (suspended || mode !== "full") this.clear();
@@ -212,6 +223,7 @@ export class OverlayRenderer {
   drawLeads(matrix, clip, content, pathHeight, state) {
     if (state.hudLayout !== "classic") {
       const one = leadPresent(state.leadOne) ? state.leadOne : null;
+      if (!one && !leadPresent(state.leadTwo)) this.impactLabel = null;
       if (one) this.drawReticle(one, matrix, clip, pathHeight, state, true);
       if (leadPresent(state.leadTwo) && (!one || Math.abs(state.leadTwo.dRel - one.dRel) > 3)) this.drawReticle(state.leadTwo, matrix, clip, pathHeight, state, !one);
       return;
@@ -268,13 +280,27 @@ export class OverlayRenderer {
     if (!tag) return;
     const font = .034 * this.height;
     const text = `${Math.round(state.isMetric ? d : d * 3.28084)} ${state.isMetric ? 'm' : 'ft'}`;
-    ctx.font = `bold ${font}px Roboto, Arial, sans-serif`;
-    const w = ctx.measureText(text).width + font * 1.1, h = font * 1.4;
+    const h = font * 1.4;
     const x = (near[0].x + near[1].x) / 2;
     const unit = Math.min(this.width/536,this.height/240);
     const y = Math.max(Math.min(near[0].y,near[1].y) - h - .014*this.height, 106*unit);
-    ctx.fillStyle = "rgba(20,20,20,.75)"; ctx.beginPath(); ctx.roundRect(x-w/2,y,w,h,h*.3); ctx.fill();
-    ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text,x,y+h/2);
+    drawLeadLabel(ctx, text, x, y, font, color, this.width);
+    const motion = leadMotion(lead, state);
+    const captionFont = .03 * this.height, rowHeight = captionFont * 1.4, gap = .008 * this.height;
+    const rows = 2; // Reserve the fading line so speed does not jump at the screen edge.
+    const top = clamp(Math.max(near[2].y,near[3].y) + gap, 4, this.height - rows * (rowHeight + gap) - 4);
+    let captionY = top;
+    if (motion.speed !== null) {
+      drawLeadLabel(ctx, `${motion.speed} ${state.isMetric ? 'km/h' : 'mph'}`, x, captionY, captionFont, color, this.width);
+      captionY += rowHeight + gap;
+    }
+    if (motion.impact === null) { this.impactLabel = null; return; }
+    const key = lead === state.leadTwo ? "two" : "one";
+    const now = performance.now();
+    if (this.impactLabel?.key !== key) this.impactLabel = { key, since: now };
+    // Existing live telemetry paints drive this short fade; no extra redraw loop.
+    const opacity = clamp((now - this.impactLabel.since) / 250, 0, 1);
+    drawLeadLabel(ctx, `TTI ${motion.impact.toFixed(1)} s`, x, captionY, captionFont, color, this.width, opacity);
   }
 
   destroy() {

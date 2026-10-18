@@ -3,6 +3,7 @@ import {
   displaySpeed,
   isCruiseSet,
   leadWarningColor,
+  leadMotion,
   setSpeed,
   speedConversion,
   speedLimitToShow,
@@ -41,13 +42,14 @@ function leadValues(state) {
   const distance = Number(lead.dRel) || 0;
   const relative = Number(lead.vRel) || 0;
   const conversion = speedConversion(state);
+  const motion = leadMotion(lead, state);
   return {
     distance,
     relative,
     gap: state.vEgo > 0.5 ? `${(distance / state.vEgo).toFixed(1)} s` : dash,
     relativeText: `${relative * conversion > 0 ? "+" : ""}${Math.round(relative * conversion)} ${speedUnit(state)}`,
-    leadSpeed: `${Math.max(0, Math.round((state.vEgo + relative) * conversion))} ${speedUnit(state)}`,
-    impact: relative < -0.1 && distance / -relative < 99 ? `${(distance / -relative).toFixed(1)} s` : dash
+    leadSpeed: motion.speed === null ? dash : `${motion.speed} ${speedUnit(state)}`,
+    impact: motion.impact === null ? dash : `${motion.impact.toFixed(1)} s`
   };
 }
 

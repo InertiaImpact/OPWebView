@@ -394,6 +394,16 @@ export function activeLead(state) {
   return lead && (lead.status === true || lead.present === true) ? lead : null;
 }
 
+export function leadMotion(lead, state) {
+  const relative = lead?.vRel == null ? NaN : Number(lead.vRel);
+  const distance = lead?.dRel == null ? NaN : Number(lead.dRel);
+  const speed = Number.isFinite(relative) && Number.isFinite(state.vEgo)
+    ? Math.max(0, Math.round((state.vEgo + relative) * speedConversion(state))) : null;
+  const seconds = distance / -relative;
+  const impact = Number.isFinite(distance) && Number.isFinite(relative) && distance > 0 && relative < -.1 && seconds < 99 ? seconds : null;
+  return { speed, impact };
+}
+
 export function leadWarningColor(distance, relativeSpeed) {
   const level = distance >= 40 ? 0 : clamp(1 - distance / 40 + Math.max(0, -relativeSpeed / 10), 0, 1);
   const a = level < .5 ? [255,255,255] : [255,154,60];

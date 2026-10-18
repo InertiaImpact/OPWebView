@@ -41,7 +41,7 @@ test("renderer projects corrected rear/front faces but keeps the raw lead distan
   OverlayRenderer.prototype.drawReticle.call(renderer,lead,matrix,null,1.22,state,true);
   assert.deepEqual(paths[0],box.front.map(p=>projectPoint(matrix,p)));
   assert.deepEqual(paths[1],[projectPoint(matrix,box.rear[0]),projectPoint(matrix,box.front[0])]);
-  assert.deepEqual(texts,["5 m"]);
+  assert.deepEqual(texts,["5 m","0 km/h"]);
   assert.equal(lead.dRel,5,"drawing must not mutate telemetry or following distance");
 });
 

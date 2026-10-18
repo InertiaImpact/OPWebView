@@ -11,6 +11,7 @@ The pinned Enhanced, Detailed, top-row, HUD, camera-transform and model-renderer
 - Text uses Roboto when available (including Android), with Arial fallback. Camera video and projected overlays share calibration, crop, zoom and horizon offset.
 - Custom layouts remain percentage-based and locally saved. Recalling a preset uses current source geometry; viewport changes do not modify saved custom arrangements.
 - On dev, valid lead tracks and lead readouts remain visible while disengaged. Engagement is not a lead-visibility condition; absent tracks still show no box and unavailable readouts.
+- The tagged lead box shows lead speed below it. When closing speed exceeds 0.1 m/s and estimated time to impact is under 99 seconds, a second **TTI** line fades in over 250 ms. This shares the lead widgets' calculation, assumes unchanged relative speed, and is not a collision prediction. Invalid/non-closing values hide immediately; no extra overlay animation loop is added.
 
 ## Window and lifecycle behavior
 
