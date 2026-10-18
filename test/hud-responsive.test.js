@@ -7,6 +7,19 @@ import { createInitialState, TelemetryStore, applyTelemetry, leadWarningColor } 
 import { ViewportController, presentationMode } from "../public/src/core/viewport-controller.js";
 import { calculateFrameTransform, cameraFor, calibrationMatrix, matvec3, projectPoint } from "../public/src/render/projection.js";
 import { WidgetManager } from "../public/src/widgets/widget-manager.js";
+import { WIDGETS } from "../public/src/widgets/widget-catalog.js";
+
+test("health cells reserve space for full two-digit power readings without shrinking the text", async () => {
+  const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  const cellRule = [...css.matchAll(/\.health-grid \.data-row\s*\{([^}]+)\}/g)].at(-1)[1];
+  assert.match(cellRule, /gap:\s*calc\(1 \* var\(--widget-unit\)\)/);
+  assert.match(cellRule, /padding:\s*0 calc\(2 \* var\(--widget-unit\)\)/);
+  assert.match(css, /\.health-grid \.data-row strong\s*\{\s*font-size:\s*calc\(5\.6 \* var\(--widget-unit\)\)/);
+  const widget = WIDGETS.find(({id}) => id === "deviceHealth");
+  for (const watts of [12.5, 99.9]) {
+    assert.match(widget.render({...createInitialState(), deviceSeen:true, powerDrawW:watts}), new RegExp(`${watts.toFixed(1).replace(".", "\\.")} W</strong>`));
+  }
+});
 
 test("device health group has square outer corners but keeps rounded individual cells", async () => {
   const css = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");

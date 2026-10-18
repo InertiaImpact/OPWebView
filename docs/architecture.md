@@ -25,6 +25,8 @@ The app is framework-free. This keeps the GitHub Pages artifact static and the o
 
 Each widget is a declarative entry containing an ID, title, visual role, and render function. Adding a widget does not require changes to drag/resize/persistence behavior. The Classic, Enhanced, and Detailed presets are immutable starting points; applying an edit creates a custom working layout. Named snapshots and the current working layout are stored in `localStorage` and remain device-local and available offline.
 
+Device health shows power in watts and separate Wi-Fi/CELL cells. The [rx-wb-stg device telemetry](https://github.com/gerrylum/openpilot/blob/rx-wb-stg/openpilot/system/hardware/hardwared.py) supplies strength for the active network only; the inactive or unknown signal displays “–”, not a cached reading. Calibration telemetry is still used for camera overlays.
+
 The editor uses percentage coordinates so a layout survives different screen sizes and orientations. On dev, editing menus overlay the unchanged widget workspace and collapse independently. The version-two persistence schema migrates the original five-widget layout without making newly added widgets unexpectedly visible. See [stored-data compatibility](stored-data.md).
 
 ## Discovery strategy

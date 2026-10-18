@@ -3,6 +3,48 @@ import assert from "node:assert/strict";
 import { extractJsonObjects } from "../public/src/core/telemetry-adapter.js";
 import { createInitialState, TelemetryStore } from "../public/src/core/state.js";
 import { CerealAdapter } from "../public/src/core/telemetry-adapter.js";
+import { WIDGETS } from "../public/src/widgets/widget-catalog.js";
+
+const health = (state) => WIDGETS.find(({id}) => id === "deviceHealth").render(state);
+const signalCell = (html, label) => html.match(new RegExp(`${label}</span><strong[^>]*>([\\s\\S]*?)</strong>`))[1];
+
+test("cellular signal replaces calibration and never repeats Wi-Fi strength", () => {
+  const store = new TelemetryStore();
+  const adapter = new CerealAdapter(store);
+  const update = (data) => adapter.apply(JSON.stringify({type:"deviceState",data}));
+  update({networkType:"wifi",networkStrength:"great"});
+  assert.equal(store.state.networkType,"wifi");
+  assert.match(signalCell(health(store.state),"Wi-Fi"), /Wi-Fi great signal/);
+  assert.equal(signalCell(health(store.state),"CELL"),"–");
+  assert.doesNotMatch(health(store.state),/CALIB/);
+  update({networkType:"cell4G",networkStrength:"moderate"});
+  assert.equal(signalCell(health(store.state),"Wi-Fi"),"–");
+  const cell = signalCell(health(store.state),"CELL");
+  assert.match(cell,/Cellular moderate signal/);
+  assert.equal([...cell.matchAll(/class="lit"/g)].length,2);
+  update({networkType:"none",networkStrength:"unknown"});
+  assert.equal(signalCell(health(store.state),"CELL"),"–");
+  assert.equal(signalCell(health(store.state),"Wi-Fi"),"–");
+  update({networkStrength:"great"});
+  assert.equal(store.state.networkType,"unknown");
+  assert.equal(signalCell(health(store.state),"CELL"),"–");
+  assert.equal(signalCell(health(store.state),"Wi-Fi"),"–");
+});
+
+test("cell signal supports all published cellular types and unknown readings stay unavailable", () => {
+  for (const networkType of ["cell2G","cell3G","cell4G","cell5G"]) {
+    for (const [networkStrength, bars] of [["poor",1],["moderate",2],["good",3],["great",4]]) {
+      const state = {...createInitialState(),deviceSeen:true,networkType,networkStrength};
+      assert.equal([...signalCell(health(state),"CELL").matchAll(/class="lit"/g)].length,bars);
+      assert.equal(signalCell(health(state),"Wi-Fi"),"–");
+    }
+  }
+  for (const state of [createInitialState(),{deviceSeen:true,networkType:"cell4G",networkStrength:"unknown"},
+    {deviceSeen:true,networkType:"ethernet",networkStrength:"great"}]) {
+    assert.equal(signalCell(health(state),"CELL"),"–");
+    assert.equal(signalCell(health(state),"Wi-Fi"),"–");
+  }
+});
 
 test("extracts concatenated telemetry objects", () => {
   const input = '{"type":"carState","data":{"vEgo":1}}{"type":"modelV2","data":{}}';
