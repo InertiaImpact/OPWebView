@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-OP WebView is a viewer, not a driving controller. It requests camera and read-only cereal services, projects the supplied model output, and renders local UI. It does not infer lanes from video, publish control messages, or require a cloud backend.
+OP WebView is a viewer, not a driving controller. It requests camera and read-only cereal services, projects the supplied model output, and renders local UI. It does not infer lanes from video, publish vehicle-control messages, or require a cloud backend. Its camera-selection messages only change the displayed livestream source.
 
 ## Layering
 

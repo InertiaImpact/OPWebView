@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { StartupConnection, localNetworkPermission } from "../public/src/core/startup-connection.js";
 import { DeviceDiscovery } from "../public/src/core/device-discovery.js";
 import { installFullscreenGesture } from "../public/src/core/fullscreen-gesture.js";
@@ -32,6 +34,33 @@ test("the first verified device connects immediately without a countdown or seco
   await h.startup.start();
   assert.deepEqual(h.connected, [first]);
   assert.equal(h.statuses.some(([state]) => state === "waiting"), false);
+});
+
+test("user cancellation pauses automatic resumes until an explicit scan", async () => {
+  const device={host:"192.168.1.10",reachable:true},h=harness([device]);
+  h.startup.pause(); await h.startup.start(); assert.equal(h.connected.length,0);
+  await h.startup.start({manual:true}); assert.equal(h.connected.length,1);
+  const another=harness([device]);
+  another.startup.cancel(); await another.startup.start();
+  assert.equal(another.connected.length,1,"background suspension does not permanently pause discovery");
+});
+
+test("idle pages resume discovery on foreground/online/network events without overriding manual entry", async () => {
+  const app = await readFile(new URL("../public/src/app.js",import.meta.url),"utf8");
+  assert.match(app,/void startup\.start\(\);/);
+  assert.doesNotMatch(app,/window\.addEventListener\("load", \(\) => startup\.start/);
+  const source=app.match(/function resumeDiscovery\(\) \{[\s\S]*?(?=connection\.addEventListener\("handoff")/)[0];
+  const events={},context={elements:{connectionDialog:{open:false},diagnosticsDialog:{open:false}},
+    connection:{userClosed:false},demoActive:false,streamBusy:()=>false,
+    startup:{start(){context.starts++;},cancel(){context.cancels++;}},starts:0,cancels:0,
+    window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{connection:{addEventListener:(name,fn)=>events.network=fn}}};
+  vm.runInNewContext(source,context);
+  events.pageshow(); events.online(); events.network();
+  assert.equal(context.starts,3); assert.equal(context.cancels,1);
+  context.elements.connectionDialog.open=true; events.pageshow(); assert.equal(context.starts,3);
+  context.elements.connectionDialog.open=false; context.connection.userClosed=true;
+  events.online(); assert.equal(context.starts,3);
+  context.streamBusy=()=>true; events.network(); assert.equal(context.cancels,1);
 });
 
 test("saved history cannot displace the first device found on this network", async () => {

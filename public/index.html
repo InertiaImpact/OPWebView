@@ -8,7 +8,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/web-wheel-192.png" />
     <link rel="apple-touch-icon" href="./icons/web-wheel-192.png" />
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=21" />
     <title>OP WebView</title>
   </head>
   <body>
@@ -43,6 +43,8 @@
         <div class="video-backdrop" aria-hidden="true"></div>
         <video id="road-video" autoplay playsinline muted aria-label="Live road camera"></video>
         <canvas id="model-overlay" aria-label="Telemetry overlay"></canvas>
+        <canvas id="camera-snapshot" aria-hidden="true" hidden></canvas>
+        <p id="camera-switch-status" class="stream-health" role="status" hidden>Switching camera…</p>
         <div id="engagement-frame" class="engagement-frame" aria-hidden="true"></div>
 
         <section id="widget-layer" class="widget-layer" aria-label="Dashboard widgets"></section>
@@ -62,8 +64,10 @@
             <input id="layout-name" maxlength="40" autocomplete="off" placeholder="Name this view" aria-label="Layout name" />
             <button id="save-layout-button" type="button">Save</button>
           </div>
-          <button id="reset-layout-button" type="button">Reset current view</button>
-          <button id="editing-devices-button" type="button">Devices / logs</button>
+          <div class="editor-actions">
+            <button id="reset-layout-button" type="button" title="Reset current view">Reset view</button>
+            <button id="editing-devices-button" type="button">Devices / logs</button>
+          </div>
           <button id="done-editing-button" type="button">Done</button>
         </aside>
         <aside id="widget-panel" class="floating-panel widget-panel" hidden aria-label="Visible widgets">
@@ -136,6 +140,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="./vendor/qrcode-generator.js?v=1"></script>
-    <script type="module" src="./src/app.js?v=26"></script>
+    <script type="module" src="./src/app.js?v=33"></script>
   </body>
 </html>

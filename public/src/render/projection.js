@@ -1,4 +1,16 @@
 export const HEIGHT_INIT = 1.22;
+// rx-wb-stg radard subtracts this offset from model lead x when publishing dRel.
+// Restore it only for camera-space drawing, never for the displayed lead gap.
+export const RADAR_TO_CAMERA = 1.52;
+
+export function leadBoxVertices(distance, lateral, groundHeight) {
+  if (![distance, lateral, groundHeight].every(Number.isFinite) || distance <= 0) return null;
+  const rearDistance = distance + RADAR_TO_CAMERA;
+  // Generic vehicle dimensions, not measured bounds: width 1.8 m, height 1.5 m,
+  // length 4.5 m. The tracked rear face is nearest to our camera.
+  const face = (x) => [[-1,1],[1,1],[1,0],[-1,0]].map(([y,z]) => [x, -lateral + y * .9, groundHeight - z * 1.5]);
+  return { rear: face(rearDistance), front: face(rearDistance + 4.5) };
+}
 
 export const VIEW_FRAME_FROM_DEVICE_FRAME = Object.freeze([
   [0, 1, 0],

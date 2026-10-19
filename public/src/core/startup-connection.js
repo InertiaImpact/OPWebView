@@ -18,8 +18,14 @@ export class StartupConnection {
     this.status("idle");
   }
 
-  async start() {
-    if (this.running || !this.idle()) return;
+  pause() {
+    this.paused = true;
+    this.cancel();
+  }
+
+  async start({ manual = false } = {}) {
+    if (manual) this.paused = false;
+    if (this.paused || this.running || !this.idle()) return;
     this.cancel();
     const generation = this.generation;
     this.running = true;

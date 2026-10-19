@@ -107,6 +107,11 @@ button { color: inherit; }
   z-index: 2;
 }
 
+#camera-snapshot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; pointer-events: none; opacity: 1; transition: opacity 160ms ease; }
+#camera-snapshot.camera-snapshot-fade { opacity: 0; }
+.app:is(.camera-switching,.camera-handoff-fading) #road-video { transition: none; }
+@media (prefers-reduced-motion: reduce) { #camera-snapshot { transition: none; } }
+
 .engagement-frame {
   position: absolute;
   inset: max(10px, 1.6vmin);
@@ -119,8 +124,8 @@ button { color: inherit; }
 }
 
 .app[data-drive-state="engaged"] { --frame: #17a35a; }
-.app[data-drive-state="override"] { --frame: #9ca4a0; }
-.app[data-drive-state="latOnly"] { --frame: #4d9dff; }
+.app[data-drive-state="override"] { --frame: #89928d; }
+.app[data-drive-state="latOnly"] { --frame: #00c8c8; }
 .app[data-drive-state="longOnly"] { --frame: #961ca8; }
 
 
@@ -726,8 +731,13 @@ html, body { min-width: 0; }
 .device-panel { left: max(16px, env(safe-area-inset-left)); width: clamp(280px, 32vw, 380px); max-width: calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))); }
 .view-panel { left: max(12px, env(safe-area-inset-left)); }
 .widget-panel { right: max(12px, env(safe-area-inset-right)); }
-.app { --editor-dock-width: min(260px, 26vw); }
+.app { --editor-dock-width: min(240px, 44vw); }
 .view-panel, .widget-panel { width: var(--editor-dock-width); }
+.view-panel, .widget-panel { padding: 8px; border-radius: 10px; }
+.widget-panel { width: min(264px, 44vw); }
+.view-panel .dock-header, .widget-panel .dock-header { gap: 6px; margin-bottom: 6px; min-height: 32px; font-size: 13px; }
+.view-panel .dock-header #layout-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.view-panel .panel-collapse, .widget-panel .panel-collapse { min-width: 32px; min-height: 32px; padding: 4px 8px; }
 .floating-panel.panel-collapsed { width: auto; overflow: visible; }
 .floating-panel.panel-collapsed > :not(.dock-header):not(#done-editing-button) { display: none; }
 .floating-panel.panel-collapsed .dock-header { margin-bottom: 0; }
@@ -768,20 +778,27 @@ html, body { min-width: 0; }
 .floating-panel .add-device-button { width: 100%; margin-top: 12px; color: var(--accent); font-size: 20px; background: #55eaa30a; }
 .add-device-button span { margin-left: 5px; font-size: 13px; }
 .gesture-hint { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
-.view-panel .layout-presets { grid-template-columns: 1fr; gap: 6px; }
-.view-panel .layout-preset { min-height: 46px; padding: 8px 10px; }
-.view-panel .layout-preset strong { font-size: 14px; }
+.view-panel .layout-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.view-panel .layout-preset { min-height: 36px; padding: 5px 3px; border-radius: 7px; text-align: center; }
+.view-panel .layout-preset strong { margin: 0; font-size: 12px; }
 .view-panel .layout-preset span { display: none; }
 .view-panel .layout-preset[data-active="true"] { border-color: var(--accent); color: var(--accent); }
-.view-panel .section-heading { margin-top: 16px; font-size: 11px; }
-.view-panel .saved-layout-row { grid-template-columns: 1fr auto; padding: 6px; gap: 5px; }
-.view-panel .saved-layout-row strong { grid-column: 1 / -1; font-size: 13px; overflow-wrap: anywhere; }
-.view-panel .save-layout-row { grid-template-columns: 1fr; margin: 12px 0; }
-.view-panel .save-layout-row input { min-height: 36px; padding: 7px 10px; font-size: 13px; }
-.view-panel #done-editing-button { position: sticky; bottom: 0; z-index: 1; display: block; width: 100%; margin-top: 8px; color: #07150e; background: var(--accent); font-weight: 750; }
-.widget-panel .widget-toggle { min-height: 40px; padding: 0 8px; border-radius: 7px; }
-.widget-panel .widget-toggle label { font-size: 12px; }
-.widget-panel .widget-toggles { gap: 6px; }
+.view-panel .section-heading { margin-top: 10px; padding-bottom: 4px; font-size: 10px; }
+.view-panel .saved-layouts { gap: 4px; margin-top: 4px; max-height: 120px; overflow-y: auto; }
+.view-panel .saved-layout-empty { padding: 4px 0; font-size: 12px; }
+.view-panel .saved-layout-row { grid-template-columns: minmax(0, 1fr) auto auto; min-height: 36px; padding: 2px 4px; gap: 4px; border-radius: 7px; }
+.view-panel .saved-layout-row strong { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.view-panel .saved-layout-row button { min-height: 32px; min-width: 32px; padding: 4px 6px; }
+.view-panel .saved-layout-row button:not(.danger-button) { color: #07150e; background: var(--accent); }
+.view-panel .save-layout-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px; margin: 8px 0; }
+.view-panel .save-layout-row input { min-width: 0; min-height: 36px; padding: 6px 8px; font-size: 12px; }
+.view-panel .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.view-panel .editor-actions button { font-size: 12px; padding: 5px 4px; }
+.view-panel #done-editing-button { position: sticky; bottom: 0; z-index: 1; display: block; width: 100%; margin-top: 6px; color: #07150e; background: var(--accent); font-weight: 750; }
+.widget-panel .widget-toggle { min-height: 36px; padding: 0 5px; gap: 3px; border-radius: 6px; }
+.widget-panel .widget-toggle label { flex: 1; min-width: 0; min-height: 34px; display: flex; align-items: center; font-size: 11px; line-height: 1.15; overflow-wrap: anywhere; cursor: pointer; }
+.widget-panel .widget-toggle input { flex: none; width: 18px; height: 18px; margin: 0; }
+.widget-panel .widget-toggles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 0; }
 .app.layout-editing .widget-layer { opacity: 1; }
 .app[data-presentation="camera"] .floating-panel, .app[data-presentation="camera"] .device-panel-toggle { display: none; }
 @media (max-width: 600px), (max-height: 420px) {
@@ -789,4 +806,8 @@ html, body { min-width: 0; }
   .floating-panel { padding: 10px; top: max(8px, env(safe-area-inset-top)); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .widget-panel .widget-toggle { padding: 0 5px; }
   .widget-panel .widget-toggle label { font-size: 11px; }
+}
+@media (max-width: 600px) {
+  .widget-panel .widget-toggles { grid-template-columns: 1fr; }
+  .view-panel .layout-presets { grid-template-columns: 1fr; }
 }

@@ -144,6 +144,16 @@ function pendingHarness() {
 }
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+test("camera handoff snapshots before changing the displayed camera geometry", async () => {
+  const h=pendingHarness(), first=h.manager.connect("192.168.1.10");
+  h.attempts[0].resolve(); await first;
+  let captured;
+  h.manager.addEventListener("handoff",()=>captured={stream:h.manager.streamType,switching:h.store.state.isSwitchingStream});
+  Object.assign(h.store.state,{experimentalMode:true,vEgo:5}); h.tick();
+  assert.deepEqual(captured,{stream:"road",switching:false});
+  h.attempts[1].resolve(); await settle(); await h.manager.disconnect();
+});
+
 test("dynamic experimental cannot close startup before video; handoffs serialize and use latest mode", async () => {
   const h = pendingHarness();
   const first = h.manager.connect("192.168.1.10");

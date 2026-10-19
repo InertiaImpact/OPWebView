@@ -10,8 +10,12 @@ The pinned Enhanced, Detailed, top-row, HUD, camera-transform and model-renderer
 - Detailed: the shared Enhanced HUD plus clock/device grid, folding steering/driver/longitudinal/lead panels, lateral-acceleration and acceleration histories (ten seconds), and bottom status chips. Side columns shrink together to fit short screens.
 - Text uses Roboto when available (including Android), with Arial fallback. Camera video and projected overlays share calibration, crop, zoom and horizon offset.
 - Custom layouts remain percentage-based and locally saved. Recalling a preset uses current source geometry; viewport changes do not modify saved custom arrangements.
+- On dev, valid lead tracks and lead readouts remain visible while disengaged. Engagement is not a lead-visibility condition; absent tracks still show no box and unavailable readouts.
+- The tagged lead box shows lead speed below it. When closing speed exceeds 0.1 m/s and estimated time to impact is under 99 seconds, a second **TTI** line fades in over 250 ms. This shares the lead widgets' calculation, assumes unchanged relative speed, and is not a collision prediction. Invalid/non-closing values hide immediately; no extra overlay animation loop is added.
 
 ## Window and lifecycle behavior
+
+Dev lead boxes restore rx-wb-stg's 1.52 m radar-to-camera distance offset for projection only. Their nearest/rear face anchors at the corrected track point, with a generic 4.5 m length extending forward (1.8 m wide, 1.5 m tall). Distance labels and telemetry remain unchanged. These are illustrative vehicle-sized boxes, not measured vehicle bounds; calibration, track error, and video/telemetry timing can still affect alignment. Source convention: [rx-wb-stg radard](https://github.com/gerrylum/openpilot/blob/rx-wb-stg/openpilot/selfdrive/controls/radard.py).
 
 - Normal page: full chosen layout. Fullscreen, orientation, visual-viewport resize and foreground return refresh widget geometry and canvas resolution.
 - Width below 480 px or height below 240 px: temporary speed + torque presentation, with the expensive road overlay disabled.

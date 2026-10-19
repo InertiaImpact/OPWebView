@@ -1,4 +1,4 @@
-import { applyTelemetry } from "./state.js?v=3";
+import { applyTelemetry } from "./state.js?v=4";
 export const MAX_TELEMETRY_BUFFER = 1024 * 1024;
 
 export class CerealAdapter {

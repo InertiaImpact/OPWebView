@@ -1,8 +1,14 @@
 # Startup discovery and fullscreen (DEV)
 
+On dev, discovery starts as soon as the app module is ready and restarts when an idle page returns to the foreground or its network changes. Cancel pauses automatic discovery until **Scan network** is selected. Manual IP entry also pauses it. Scans prioritize the last verified address from this open page only when it belongs to the freshly detected current subnet; no history is saved or old subnets scanned.
+
+Dev uses rx-wb-stg's existing in-session camera-switch command: the peer, telemetry channel and overlay remain active, with no comma patch. A stalled presentation or older browser falls back to reconnecting; that fallback holds a size-limited video-only snapshot below the visible overlay until replacement video presents a frame. Projection stays on the old camera until then. Reconnect fallback can briefly interrupt telemetry; a continuing frame alone cannot confirm camera identity because the server provides no explicit acknowledgement. See [handoff details and limits](camera-handoff-options.md).
+
 On each load, DEV checks the browser's `local-network` permission (with `local-network-access` fallback). If denied, it explains how to allow access in site settings; webpages cannot override a denial. For prompt/unknown states, the local schema fetch attempts to trigger the browser's permission prompt. If the browser requires interaction, use **Scan network** in the floating left device panel. The **+** button opens manual IP entry without automatically focusing the input.
 
 ## Floating controls
+
+Dev editing panels use a single-row preset selector/save form, compact saved-view actions, and a two-column widget list on landscape/tablet screens (one column on narrow screens). Headers remain draggable/collapsible, and the panels never resize the dashboard underneath. Saved names stay accessible through full labels/tooltips even when visually shortened.
 
 - The responsive device panel replaces the toolbar/welcome screen. Only devices positively identified on the current network are listed, including the connected device when reopened. `comma.local` is checked alongside IP scanning and listed only if it responds. **Demo** hides when a device is found.
 - A device/wireless icon and **Devices** label toggle the panel: integrated into its open header, or a compact top-left pill when collapsed. **Tools** holds logs, fullscreen and installation. A successful connection hides both the panel and its launcher; reopen **Devices / logs** from the editing Views menu.

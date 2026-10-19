@@ -77,6 +77,7 @@ export class DeviceDiscovery extends EventTarget {
       const result = { ...device, reachable: true };
       results.set(device.authority, result);
       report.found++;
+      this.lastReachable = result;
       // Publish before invoking auto-connect, which may immediately abort scanning.
       this.dispatchEvent(new CustomEvent("devicefound", { detail: result }));
       onReachable(result);
@@ -136,7 +137,12 @@ export class DeviceDiscovery extends EventTarget {
   }
 
   async scanSubnet(prefix, signal, onReachable = () => {}, probe = (device, timeout) => this.probe(device, timeout, signal)) {
-    const queue = subnetHosts(prefix).map((host) => normalizeHost(host));
+    const hosts = subnetHosts(prefix);
+    // Session memory only. Never probe yesterday's subnet, and never let a
+    // stale hint delay the remaining current-network probes.
+    const recent = hosts.indexOf(this.lastReachable?.host);
+    if (recent > 0) hosts.unshift(...hosts.splice(recent, 1));
+    const queue = hosts.map((host) => normalizeHost(host));
     let cursor = 0;
     const worker = async () => {
       while (!signal?.aborted && cursor < queue.length) {
