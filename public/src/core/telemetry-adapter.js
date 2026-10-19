@@ -1,4 +1,5 @@
-import { applyTelemetry } from "./state.js?v=4";
+import { applyTelemetry } from "./state.js?v=5";
+import { createChestnutState } from "./chestnut.js";
 export const MAX_TELEMETRY_BUFFER = 1024 * 1024;
 
 export class CerealAdapter {
@@ -26,7 +27,7 @@ export class CerealAdapter {
     for (const raw of objects) {
       try {
         const message = parseTelemetryJson(raw);
-        if (typeof message.type === "string" && applyTelemetry(this.store, message.type, message.data)) {
+        if (typeof message.type === "string" && applyTelemetry(this.store, message.type, message.data, message)) {
           applied += 1;
           this.lastAppliedTypes.add(message.type);
         }
@@ -40,6 +41,7 @@ export class CerealAdapter {
   reset() {
     this.buffer = "";
     this.lastAppliedTypes.clear();
+    this.store.update((state) => { state.chestnut = createChestnutState(); });
   }
 }
 

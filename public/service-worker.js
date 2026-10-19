@@ -1,6 +1,6 @@
 const IS_DEV = new URL("./", self.location.href).pathname.endsWith("/dev/");
 const CACHE_PREFIX = IS_DEV ? "opwebview-dev-shell-v" : "opwebview-shell-v";
-const CACHE_VERSION = 46;
+const CACHE_VERSION = 47;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
@@ -9,17 +9,18 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./icons/web-wheel-192.png",
   "./icons/web-wheel-512.png",
-  "./src/app.js?v=33",
+  "./src/app.js?v=34",
   "./src/core/app-channel.js",
-  "./src/demo.js?v=4",
-  "./src/core/state.js?v=4",
-  "./src/core/telemetry-adapter.js?v=3",
+  "./src/core/chestnut.js",
+  "./src/demo.js?v=5",
+  "./src/core/state.js?v=5",
+  "./src/core/telemetry-adapter.js?v=4",
   "./src/core/device-discovery.js?v=5",
   "./src/core/device-discovery.js",
   "./src/core/storage.js",
-  "./src/core/webrtc-transport.js?v=7",
+  "./src/core/webrtc-transport.js?v=8",
   "./src/core/connection-manager.js?v=7",
-  "./src/core/diagnostic-log.js?v=13",
+  "./src/core/diagnostic-log.js?v=14",
   "./src/core/camera-transition.js",
   "./src/core/viewport-controller.js",
   "./src/core/startup-connection.js?v=4",
@@ -30,7 +31,7 @@ const APP_SHELL = [
   "./src/core/movable-panel.js",
   "./src/render/projection.js",
   "./src/render/overlay-renderer.js",
-  "./src/widgets/widget-manager.js?v=3",
+  "./src/widgets/widget-manager.js?v=4",
   "./src/widgets/widget-catalog.js",
   "./src/widgets/layout-presets.js",
   "./src/widgets/widget-graphs.js",

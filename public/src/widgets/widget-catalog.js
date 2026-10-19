@@ -9,8 +9,9 @@ import {
   speedLimitToShow,
   steeringMode,
   torqueBarValue
-} from "../core/state.js?v=4";
-import { torqueGraph, traceGraph, confidenceGraph } from "./widget-graphs.js";
+} from "../core/state.js?v=5";
+import { torqueGraph, traceGraph, confidenceGraph, chestnutPowerGraph } from "./widget-graphs.js";
+import { chestnutStatus } from "../core/chestnut.js";
 
 const dash = "–";
 const noLead = "– –";
@@ -21,7 +22,7 @@ const number = (value, digits = 0) => Number.isFinite(Number(value)) ? Number(va
 const angle = (value) => `${Math.abs(Number(value)) < 0.05 ? "0.0" : Number(value).toFixed(1)}°`;
 const speedUnit = (state) => state.isMetric ? "km/h" : "mph";
 const row = (label, value, tone = "") => `<div class="data-row"><span>${label}</span><strong ${tone.startsWith('rgb(') ? `style="color:${tone}"` : `class="${tone}"`}>${value}</strong></div>`;
-const panel = (title, rows, badge = "", footer = "") => `<header><button type="button" class="panel-toggle" aria-label="Fold ${title.toLowerCase()} panel" aria-expanded="true">${title}<span aria-hidden="true"> ▾</span></button>${badge ? `<em class="${badge === 'SATURATED' || badge === 'EXPERIMENTAL' ? 'warn' : title === 'LEAD' ? 'angle' : badge === 'CHILL' ? 'dim' : 'good'}">${badge}</em>` : ""}</header><div class="data-rows">${rows.join("")}</div>${footer}`;
+const panel = (title, rows, badge = "", footer = "", badgeTone = "") => `<header><button type="button" class="panel-toggle" aria-label="Fold ${title.toLowerCase()} panel" aria-expanded="true">${title}<span aria-hidden="true"> ▾</span></button>${badge ? `<em class="${badgeTone || (badge === 'SATURATED' || badge === 'EXPERIMENTAL' ? 'warn' : title === 'LEAD' ? 'angle' : badge === 'CHILL' ? 'dim' : 'good')}">${badge}</em>` : ""}</header><div class="data-rows">${rows.join("")}</div>${footer}`;
 const leadTone = (lead) => lead ? leadWarningColor(lead.distance, lead.relative) : "dim";
 const networkBars = (value) => ({ poor: 1, moderate: 2, good: 3, great: 4 })[value] || 0;
 
@@ -34,6 +35,14 @@ function networkSignal(state, cellular = false) {
 
 function driveLabel(state) {
   return ({ engaged: "Engaged", override: "Override", latOnly: "Steering", longOnly: "Cruise" })[state.status] || "Standby";
+}
+
+function chestnutView(state) {
+  const status = chestnutStatus(state.chestnut);
+  const values = status === "LIVE" ? state.chestnut.values : {};
+  const measure = (key, unit, digits = 0) => Number.isFinite(values[key]) ? `${values[key].toFixed(digits)}${unit}` : dash;
+  return { status, values, measure, gpuStatus: status === "LIVE" && !state.chestnut.gpuAvailable ? "GPU N/A" : status,
+    tone: status === "LIVE" ? "good" : status === "UNAVAILABLE" ? "dim" : "warn" };
 }
 
 function leadValues(state) {
@@ -58,6 +67,35 @@ function gear(value) {
 }
 
 export const WIDGETS = Object.freeze([
+  {
+    id: "chestnutGpu", title: "Chestnut GPU", className: "detail-panel", refreshMs: 1000,
+    defaultLayout: { x: 2, y: 28, w: 24, h: 44 },
+    render(state) {
+      const v = chestnutView(state);
+      return panel("CHESTNUT GPU", [row("GPU temp",v.measure("tempC","°C")),row("Memory temp",v.measure("memoryTempC","°C")),
+        row("GPU load",v.measure("gpuUsagePercent","%")),row("Clock",v.measure("gpuClockMhz"," MHz")),row("Fan",v.measure("fanSpeedRpm"," RPM"))],
+      v.gpuStatus,"",v.gpuStatus === "GPU N/A" ? "dim" : v.tone);
+    }
+  },
+  {
+    id: "chestnutPower", title: "Chestnut power / link", className: "detail-panel", refreshMs: 1000,
+    defaultLayout: { x: 74, y: 28, w: 24, h: 50 },
+    render(state) {
+      const v = chestnutView(state), pcie = v.values.pcieLtssm;
+      return panel("CHESTNUT POWER", [row("GPU draw",v.measure("powerDrawW"," W",1)),row("GPU limit",v.measure("powerLimitW"," W",1)),
+        row("Supply",v.measure("supplyVoltage"," V",2)),row("Current",v.measure("supplyCurrent"," A",2)),
+        row("Power fault",v.values.supplyFault === true ? "FAULT" : v.values.supplyFault === false ? "none" : dash,v.values.supplyFault ? "danger" : ""),
+        row("PCIe",pcie == null ? dash : `${pcie === 0x78 ? 'UP · ' : ''}0x${pcie.toString(16).padStart(2,'0').toUpperCase()}`)],v.status,"",v.tone);
+    }
+  },
+  {
+    id: "chestnutPowerGraph", title: "Chestnut power graph", className: "detail-panel chestnut-graph", refreshMs: 1000,
+    defaultLayout: { x: 28, y: 64, w: 44, h: 28 },
+    render(state) {
+      const v = chestnutView(state);
+      return panel("CHESTNUT POWER",[row("GPU draw",v.measure("powerDrawW"," W",1))],v.gpuStatus,chestnutPowerGraph(state.chestnut),v.gpuStatus === "GPU N/A" ? "dim" : v.tone);
+    }
+  },
   {
     id: "speed", title: "Current speed", className: "classic-speed",
     render: (state) => `<strong class="speed-number">${Math.round(displaySpeed(state))}</strong><span class="speed-unit">${speedUnit(state)}</span>`

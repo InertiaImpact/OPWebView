@@ -1,4 +1,19 @@
+import { CHESTNUT_HISTORY_MS } from "../core/chestnut.js";
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
+
+export function chestnutPowerGraph(record, now = Date.now()) {
+  const samples = (record?.history || []).filter(s => s.t >= now - CHESTNUT_HISTORY_MS && s.t <= now);
+  const max = Math.max(10, Math.ceil(Math.max(0, ...samples.flatMap(s => [s.watts, s.limit ?? 0])) / 10) * 10);
+  const x = t => clamp(100 * (1 - (now - t) / CHESTNUT_HISTORY_MS), 0, 100).toFixed(2);
+  const y = v => (24 - clamp(v, 0, max) / max * 24).toFixed(2);
+  const path = key => samples.map((s, i) => {
+    if (s[key] == null) return "";
+    const previous = samples[i - 1];
+    return !previous || previous[key] == null || s.gap || s.t - previous.t > 2000
+      ? `M${x(s.t)},${y(s[key])}` : `H${x(s.t)} V${y(s[key])}`;
+  }).join(" ");
+  return `<div class="trace chestnut-trace"><div class="trace-legend"><span>GPU W · 60 s</span><span>0–${max} W · dashed: limit</span></div><svg viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="Chestnut GPU power and power limit, last sixty seconds"><path d="M0,24 H100" class="trace-zero"/><path d="${path('watts')}" stroke="#55eaa3" class="trace-got"/><path d="${path('limit')}" class="trace-want"/></svg></div>`;
+}
 
 export function traceGraph(history, { label, want, got, color, lo, hi }) {
   const samples = history || [];

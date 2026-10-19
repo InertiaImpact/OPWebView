@@ -4,7 +4,7 @@ const STORAGE_KEY = storageKey("opwebview.diagnostics.v1");
 const MAX_ENTRIES = 100;
 const MAX_FIELD_LENGTH = 500;
 
-export const APP_BUILD = `2026.10.18-live-camera.1-${APP_CHANNEL}`;
+export const APP_BUILD = `2026.10.19-chestnut.1-${APP_CHANNEL}`;
 
 export class DiagnosticLog extends EventTarget {
   constructor(storage = browserStorage()) {

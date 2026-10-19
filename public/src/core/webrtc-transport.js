@@ -17,7 +17,8 @@ export const OPTIONAL_BRIDGE_SERVICES_OUT = Object.freeze([
   "carOutput",
   "selfdriveStateSP",
   "onroadEvents",
-  "driverMonitoringState"
+  "driverMonitoringState",
+  "chestnutState"
 ]);
 
 // openpilot renamed these services after the native opview client was released.

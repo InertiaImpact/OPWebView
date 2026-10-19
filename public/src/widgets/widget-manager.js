@@ -109,6 +109,7 @@ export class WidgetManager extends EventTarget {
     if (this.suspended || this.displayMode === "camera") return;
     if (this.geometryMetric !== undefined && this.geometryMetric !== this.store.state.isMetric) { this.refreshGeometry(); return; }
     this.lastRender = performance.now();
+    const slowPaint = this.lastRender - (this.lastSlowPaint ?? -Infinity) >= 1000;
     this.layer.dataset.units = this.store.state.isMetric ? "metric" : "imperial";
     const display = this.indicators?.sample(this.store.state, performance.now());
     for (const definition of WIDGETS) {
@@ -119,7 +120,8 @@ export class WidgetManager extends EventTarget {
       if (!surface) continue;
       const state = display && ["torque", "confidence"].includes(definition.id)
         ? { ...this.store.state, ...display } : this.store.state;
-      if (!paintIndicator(surface, definition.id, state)) {
+      if (!paintIndicator(surface, definition.id, state) &&
+        (!definition.refreshMs || surface.__renderedHtml === undefined || slowPaint)) {
         const html = definition.render(state);
         if (surface.__renderedHtml !== html) {
           surface.innerHTML = html;
@@ -135,7 +137,14 @@ export class WidgetManager extends EventTarget {
         button.querySelector("span").textContent = collapsed ? " ▸" : " ▾";
       }
     }
+    if (slowPaint) this.lastSlowPaint = this.lastRender;
     if (display?.pending) this.scheduleIndicatorAnimation();
+    // Freshness still changes if all messages stop. One 1 Hz timer only when
+    // Chestnut panels are visible; no extra RAF or network requests.
+    if (!this.chestnutTimer && this.store.state.chestnut?.receivedAt != null &&
+      ["chestnutGpu","chestnutPower","chestnutPowerGraph"].some(id => this.elements.get(id)?.hidden === false)) {
+      this.chestnutTimer = setTimeout(() => { this.chestnutTimer = null; this.render(); }, 1000);
+    }
   }
 
   scheduleIndicatorAnimation() {
@@ -172,6 +181,8 @@ export class WidgetManager extends EventTarget {
   }
 
   setDisplayMode(mode, suspended = false) {
+    clearTimeout(this.chestnutTimer);
+    this.chestnutTimer = null;
     this.stopDrag?.();
     if (this.indicatorFrame) cancelAnimationFrame(this.indicatorFrame);
     this.indicatorFrame = null;
@@ -313,7 +324,7 @@ export class WidgetManager extends EventTarget {
     this.updateVisibility(id);
     // Fit custom text against its own widget, instead of the whole screen.
     const { width, height } = this.bounds || this.layer.getBoundingClientRect();
-    const reference = { detailedSteering: [112,115], detailedDriver: [112,46], detailedLongitudinal: [112,97], detailedLead: [112,73], steering:[100,68], lead:[100,68], deviceHealth:[82,34] }[id];
+    const reference = { chestnutGpu:[112,65], chestnutPower:[112,74], chestnutPowerGraph:[160,55], detailedSteering: [112,115], detailedDriver: [112,46], detailedLongitudinal: [112,97], detailedLead: [112,73], steering:[100,68], lead:[100,68], deviceHealth:[82,34] }[id];
     if (reference) {
       const unit = Math.min(width * layout.w / 100 / reference[0], height * layout.h / 100 / reference[1]);
       element.style.setProperty("--widget-unit", `${this.collapsed.has(id) ? width * layout.w / 100 / reference[0] : unit}px`);

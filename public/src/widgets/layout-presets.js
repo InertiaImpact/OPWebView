@@ -104,7 +104,7 @@ export function createPresetLayout(id) {
   const chosen = visible[id] || visible.classic;
   return Object.fromEntries(WIDGETS.map((widget) => [
     widget.id,
-    chosen[widget.id] ? { ...chosen[widget.id] } : { x: 40, y: 40, w: 20, h: 20, hidden: true }
+    chosen[widget.id] ? { ...chosen[widget.id] } : { ...(widget.defaultLayout || { x: 40, y: 40, w: 20, h: 20 }), hidden: true }
   ]));
 }
 

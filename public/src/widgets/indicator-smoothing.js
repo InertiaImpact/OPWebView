@@ -1,4 +1,4 @@
-import { torqueBarValue } from "../core/state.js?v=4";
+import { torqueBarValue } from "../core/state.js?v=5";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 

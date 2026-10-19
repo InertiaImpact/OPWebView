@@ -7,7 +7,7 @@ import {
   pathLengthIndex,
   projectPoint
 } from "./projection.js";
-import { leadWarningColor, leadMotion } from "../core/state.js?v=4";
+import { leadWarningColor, leadMotion } from "../core/state.js?v=5";
 
 const MIN_DRAW_DISTANCE = 10;
 const MAX_DRAW_DISTANCE = 100;

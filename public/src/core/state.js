@@ -1,3 +1,5 @@
+import { createChestnutState, updateChestnut } from "./chestnut.js";
+
 export const SPEED = Object.freeze({
   metersPerSecondToKph: 3.6,
   metersPerSecondToMph: 2.23694,
@@ -9,6 +11,7 @@ export function createInitialState() {
   return {
     version: 0,
     history: [],
+    chestnut: createChestnutState(),
     status: "disengaged",
     started: false,
     isConnected: false,
@@ -172,7 +175,7 @@ function alertStatus(value) {
   return ({ normal: 0, userPrompt: 1, critical: 2 })[value] ?? 0;
 }
 
-export function applyTelemetry(store, type, data) {
+export function applyTelemetry(store, type, data, metadata = {}) {
   if (!data || typeof data !== "object") return false;
 
   switch (type) {
@@ -279,6 +282,12 @@ export function applyTelemetry(store, type, data) {
     case "longitudinalPlan":
       store.update((state) => { state.allowThrottle = data.allowThrottle ?? true; });
       return true;
+    case "chestnutState": {
+      const record = store.state.chestnut;
+      if (!updateChestnut(record, data, metadata)) return false;
+      store.update(() => {});
+      return true;
+    }
     case "deviceState":
       store.update((state) => {
         state.deviceType = String(data.deviceType ?? "");

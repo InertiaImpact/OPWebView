@@ -9,7 +9,7 @@ Features:
 - WebRTC road-camera streaming with H.264 preference
 - Telemetry parsing for the stock on-road UI services
 - Canvas-based path, lane, road-edge, and lead-vehicle rendering
-- Twenty live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
+- Live-data widgets spanning speed, limits, road name, driver monitoring, model confidence, steering, lead, longitudinal control, and device health
 - Built-in Classic, Enhanced, and Detailed layouts adapted from gerrylum's OPView layouts branch
 - Named custom layouts saved locally, with recall, deletion, visibility controls, drag, resize, and preset-aware reset
 - Current-network discovery with a parallel `comma.local` check and manual local-IP entry
@@ -18,7 +18,7 @@ Features:
 - A no-hardware demo mode for validating the layout and renderer
 - A GitHub Pages deployment workflow
 
-Use [stable](https://inertiaimpact.github.io/OPWebView/) for released features or [dev](https://inertiaimpact.github.io/OPWebView/dev/) for upcoming changes. Both include automatic discovery/reconnection, floating device controls, overlay editing menus, double-tap fullscreen, and saved-data migration. Dev additionally tests a labeled camera snapshot/fade during handoffs and faster same-session rediscovery.
+Use [stable](https://inertiaimpact.github.io/OPWebView/) for released features or [dev](https://inertiaimpact.github.io/OPWebView/dev/) for upcoming changes. Both include automatic discovery/reconnection, floating editing menus, double-tap fullscreen, saved-data migration, and in-session camera switching that retains telemetry. Dev additionally offers optional Chestnut GPU, power/link, and 60-second GPU power graph widgets; enable them from the long-press editor. Existing presets are unchanged. See [Chestnut notes](docs/chestnut.md).
 
 The presets use OPView's reference sizing rather than stretching corner widgets with the window. Detailed includes live ten-second acceleration graphs and folding panels. Small page windows temporarily show speed and torque only; standard video Picture-in-Picture stays camera-only. The full chosen layout restores on return. See [the visual/resize verification notes](docs/hud-visual-pass.md) for reference details, test coverage and Android limitations.
 
