@@ -9,6 +9,7 @@ import { paintIndicator } from "../public/src/widgets/indicator-renderer.js";
 import { torquePresentation, confidencePresentation } from "../public/src/widgets/widget-graphs.js";
 import { WebRTCTransport, TELEMETRY_STALE_MS } from "../public/src/core/webrtc-transport.js";
 import { ConnectionManager } from "../public/src/core/connection-manager.js";
+import { calculateFrameTransform } from "../public/src/render/projection.js";
 
 test("NaN repair preserves text, escaped quotes and backslashes, including in invalid numeric JSON", () => {
   const text = 'NaN Avenue \\ "NaN"';
@@ -78,6 +79,35 @@ test("overlay ignores unrelated telemetry, coalesces relevant data, and refreshe
   renderer.setPresentation("full", true);
   const scheduledBefore = scheduled;
   applyTelemetry(store, "modelV2", {}); assert.equal(scheduled, scheduledBefore);
+  renderer.destroy();
+});
+
+test("handoff keeps rendering new overlay data in the visible camera geometry until release", (t) => {
+  const globals={window:{devicePixelRatio:1},ResizeObserver:class{observe(){}disconnect(){}},
+    requestAnimationFrame(fn){callback=fn;return 1;},cancelAnimationFrame(){}};
+  let callback,clears=0;
+  for(const [key,value] of Object.entries(globals)) {
+    const previous=globalThis[key];globalThis[key]=value;
+    t.after(()=>{if(previous===undefined)delete globalThis[key];else globalThis[key]=previous;});
+  }
+  let bounds={width:1199,height:498};
+  const canvas={getBoundingClientRect:()=>bounds,getContext:()=>({setTransform(){},clearRect(){clears++;}})};
+  const store=new TelemetryStore(),video={style:{}};
+  const renderer=new OverlayRenderer(canvas,store,video);
+  const expected=(streamType)=> {
+    const frame=calculateFrameTransform({...store.state,streamType},bounds.width,bounds.height);
+    return Object.fromEntries(["left","top","width","height"].map(key=>[key,`${frame[key]}px`]));
+  };
+  renderer.holdCamera(); store.update(s=>{s.streamType="wideRoad";}); callback();
+  assert.deepEqual(video.style,expected("road"));
+  const before=clears;
+  applyTelemetry(store,"radarState",{leadOne:{status:true,dRel:20}});callback();
+  assert.ok(clears>before,"relevant telemetry continues to repaint while camera geometry is held");
+  assert.deepEqual(video.style,expected("road"));
+  bounds={width:844,height:390};renderer.resize();assert.deepEqual(video.style,expected("road"));
+  renderer.releaseCamera();assert.deepEqual(video.style,expected("wideRoad"));
+  renderer.setPresentation("camera",false);renderer.holdCamera();renderer.releaseCamera();
+  renderer.setPresentation("full",false);assert.deepEqual(video.style,expected("wideRoad"));
   renderer.destroy();
 });
 

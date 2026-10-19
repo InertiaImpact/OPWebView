@@ -65,18 +65,11 @@ export class WebRTCTransport extends EventTarget {
       this.dispatchProgress(`Camera track received (${camera}). Waiting for a playable frame…`);
       this.videoElement.srcObject = event.streams[0] || new MediaStream([event.track]);
       const markFrame = () => this.markVideoReady(generation);
-      this.videoElement.addEventListener("playing", markFrame, { once: true });
-      this.videoElement.addEventListener("loadeddata", markFrame, { once: true });
+      this.waitForPresentedVideo(markFrame);
       event.track.addEventListener("unmute", () => {
         this.videoElement.play().catch((error) => this.dispatchProgress(`Camera playback was blocked: ${error.message}`));
       }, { once: true });
-      this.videoElement.play().then(() => {
-        if (typeof this.videoElement.requestVideoFrameCallback === "function") {
-          this.videoElement.requestVideoFrameCallback(markFrame);
-        } else if (this.videoElement.readyState >= 2) {
-          markFrame();
-        }
-      }).catch((error) => this.dispatchProgress(`Camera playback was blocked: ${error.message}`));
+      this.videoElement.play().catch((error) => this.dispatchProgress(`Camera playback was blocked: ${error.message}`));
     });
     peer.addEventListener("datachannel", (event) => {
       if (generation === this.generation) this.attachChannel(event.channel, generation);
@@ -198,9 +191,30 @@ export class WebRTCTransport extends EventTarget {
 
   markVideoReady(generation) {
     if (generation !== this.generation || this.readiness.videoReady) return;
+    this.cancelVideoReady?.();
     this.readiness.videoReady = true;
     this.dispatchEvent(new CustomEvent("video"));
     this.dispatchProgress("Camera is live. Waiting for telemetry data…");
+  }
+
+  waitForPresentedVideo(markFrame) {
+    this.cancelVideoReady?.();
+    const video = this.videoElement;
+    if (typeof video.requestVideoFrameCallback === "function") {
+      const id = video.requestVideoFrameCallback(markFrame);
+      this.cancelVideoReady = () => { video.cancelVideoFrameCallback?.(id); this.cancelVideoReady = null; };
+    } else {
+      // Older browsers lack presentation callbacks; a playable frame remains
+      // their best available readiness signal. Remove both listeners together.
+      const ready = () => { if (video.readyState >= 2) markFrame(); };
+      video.addEventListener("playing", ready);
+      video.addEventListener("loadeddata", ready);
+      this.cancelVideoReady = () => {
+        video.removeEventListener("playing", ready);
+        video.removeEventListener("loadeddata", ready);
+        this.cancelVideoReady = null;
+      };
+    }
   }
 
   async reportStartupReadiness(generation, camera) {
@@ -281,8 +295,53 @@ export class WebRTCTransport extends EventTarget {
     return true;
   }
 
+  switchCamera(camera, timeoutMs = 5000) {
+    if (!["road", "wideRoad"].includes(camera)) return Promise.reject(new Error("Unknown road camera."));
+    if (!this.sessionLive || this.peer?.connectionState !== "connected" || this.channel?.readyState !== "open") {
+      return Promise.reject(new Error("The live camera link is not ready to switch."));
+    }
+    if (typeof this.videoElement.requestVideoFrameCallback !== "function") {
+      return Promise.reject(new Error("This browser needs a replacement session to switch cameras."));
+    }
+    if (this.cancelCameraSwitch) return Promise.reject(new Error("A camera switch is already pending."));
+    const generation = this.generation, peer = this.peer, video = this.videoElement, page = globalThis.document;
+    return new Promise((resolve, reject) => {
+      let frame, timer, settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        page?.removeEventListener("visibilitychange", onVisibility);
+        if (frame !== undefined) video.cancelVideoFrameCallback?.(frame);
+        if (this.cancelCameraSwitch === cancel) this.cancelCameraSwitch = null;
+        if (error) reject(error); else resolve();
+      };
+      const cancel = () => finish(Object.assign(new Error("The camera switch was cancelled."), { cancelled: true }));
+      // Presentation callbacks can pause in the background. Keep the live
+      // peer instead of mistaking that pause for a stalled camera/reconnect.
+      const onVisibility = () => { if (page.hidden) cancel(); };
+      this.cancelCameraSwitch = cancel;
+      page?.addEventListener("visibilitychange", onVisibility);
+      if (page?.hidden) { cancel(); return; }
+      timer = setTimeout(() => finish(new Error("Video stopped advancing during the camera switch.")), timeoutMs);
+      try {
+        // rx-wb-stg changes the encoder source of the existing video track.
+        // No peer, data-channel, adapter or telemetry-health reset is needed.
+        if (!this.send("livestreamCameraSwitch", { camera })) throw new Error("Camera control channel closed.");
+        frame = video.requestVideoFrameCallback(() => {
+          if (generation !== this.generation || peer !== this.peer) cancel();
+          else finish();
+        });
+      } catch (error) { finish(error); }
+      // The server has no camera acknowledgement/frame-camera identifier.
+      // This observes continuing presentation, not proof of source identity.
+    });
+  }
+
   async close({ invalidate = true } = {}) {
     if (invalidate) this.generation += 1;
+    this.cancelCameraSwitch?.();
+    this.cancelVideoReady?.();
     const channel = this.channel;
     const peer = this.peer;
     this.channel = null;
@@ -309,6 +368,7 @@ export class WebRTCTransport extends EventTarget {
   }
 
   dispatchState(state) {
+    if (["failed", "disconnected", "offline"].includes(state)) this.cancelCameraSwitch?.();
     this.dispatchEvent(new CustomEvent("state", { detail: state }));
   }
 

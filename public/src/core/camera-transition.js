@@ -1,25 +1,34 @@
-// One bounded snapshot, not a second WebRTC session or an animation loop.
+// One video-only snapshot below the live overlay, not a second WebRTC session.
 export class CameraTransition {
-  constructor({ root, video, overlay, canvas, label }) {
-    Object.assign(this, { root, video, overlay, canvas, label });
+  constructor({ root, video, overlay, canvas, label, renderer }) {
+    Object.assign(this, { root, video, overlay, canvas, label, renderer });
     this.active = false;
   }
 
   start() {
     this.clear();
-    const { width, height } = this.video.getBoundingClientRect();
+    // The state may select the new camera before its video arrives. Continue
+    // projecting telemetry into the camera that is still visible meanwhile.
+    this.renderer.holdCamera();
+    const viewport = this.overlay.getBoundingClientRect();
+    const { width, height } = viewport;
     if (!width || !height || this.video.readyState < 2 || !this.video.videoWidth || !this.video.videoHeight) return false;
     const scale = Math.min(1, 1280 / width, 720 / height);
     this.canvas.width = Math.max(1, Math.round(width * scale));
     this.canvas.height = Math.max(1, Math.round(height * scale));
     try {
       const context = this.canvas.getContext("2d");
-      const zoom = Math.max(this.canvas.width / this.video.videoWidth, this.canvas.height / this.video.videoHeight);
+      const rect = this.video.getBoundingClientRect();
+      const zoom = Math.max(rect.width / this.video.videoWidth, rect.height / this.video.videoHeight);
       const w = this.video.videoWidth * zoom, h = this.video.videoHeight * zoom;
-      context.drawImage(this.video, (this.canvas.width - w) / 2, (this.canvas.height - h) / 2, w, h);
-      context.drawImage(this.overlay, 0, 0, this.canvas.width, this.canvas.height);
+      const sx = this.canvas.width / width, sy = this.canvas.height / height;
+      context.drawImage(this.video,
+        (rect.left - viewport.left + (rect.width - w) / 2) * sx,
+        (rect.top - viewport.top + (rect.height - h) / 2) * sy, w * sx, h * sy);
     } catch {
-      this.clear();
+      // Even if a browser refuses capture, hold projection until replacement
+      // video arrives. No stale overlay is baked into the snapshot.
+      this.canvas.width = this.canvas.height = 1;
       return false;
     }
     this.active = true;
@@ -29,6 +38,7 @@ export class CameraTransition {
   }
 
   finish() {
+    this.renderer.releaseCamera();
     if (!this.active) return;
     this.root.classList.remove("camera-switching");
     this.root.classList.add("camera-handoff-fading");
@@ -39,6 +49,7 @@ export class CameraTransition {
   }
 
   clear() {
+    this.renderer.releaseCamera();
     clearTimeout(this.timer);
     this.timer = null;
     this.active = false;

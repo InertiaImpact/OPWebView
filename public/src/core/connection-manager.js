@@ -133,7 +133,7 @@ export class ConnectionManager extends EventTarget {
     // Telemetry arrives before video readiness. Never close an opening session,
     // and never start two camera handoffs at once. Re-evaluate the latest mode
     // and speed when the active negotiation finishes (same 10/15 m/s hysteresis).
-    if (this.connecting || this.userClosed || !this.device || !this.store.state.isConnected) return;
+    if (this.connecting || this.userClosed || !this.device || !this.store.state.isConnected || globalThis.document?.hidden) return;
     const state = this.store.state;
     let target = "road";
     if (state.experimentalMode) {
@@ -142,9 +142,44 @@ export class ConnectionManager extends EventTarget {
     }
     if (target === this.streamType) return;
     this.dispatchEvent(new CustomEvent("progress", { detail: `Switching camera: ${this.streamType} → ${target}` }));
+    if (typeof this.transport.switchCamera === "function") {
+      this.switchLiveCamera(target);
+      return;
+    }
     // Transport.connect owns closing/replacing its previous peer; there is no
     // separate close/reconnect gap where another telemetry packet can intervene.
     this.connect(this.device, { remember: false, camera: target }).catch(() => {});
+  }
+
+  async switchLiveCamera(target) {
+    const generation = this.generation, from = this.streamType;
+    this.connecting = true; // Serialize mode changes without changing link/UI state.
+    this.store.update((state) => { state.isSwitchingStream = true; });
+    try {
+      await this.transport.switchCamera(target);
+      if (generation !== this.generation || this.userClosed) return;
+      this.streamType = target;
+      this.store.update((state) => { state.streamType = target; });
+      this.dispatchEvent(new CustomEvent("diagnostic", { detail: {
+        kind: "camera-switch", method: "in-session", from, to: target,
+        peer: this.transport.peer?.connectionState, sourceAcknowledged: false
+      } }));
+    } catch (error) {
+      if (generation !== this.generation || this.userClosed || error.cancelled || this.retryTimer) return;
+      this.dispatchEvent(new CustomEvent("diagnostic", { detail: {
+        kind: "camera-switch-fallback", from, to: target, error: error.message
+      } }));
+      // A stalled video or older browser uses the existing bounded recovery,
+      // with a video-only snapshot and continuous overlay instead of a blank.
+      this.connecting = false;
+      await this.connect(this.device, { camera: target }).catch(() => {});
+    } finally {
+      if (generation === this.generation) {
+        this.connecting = false;
+        this.store.update((state) => { state.isSwitchingStream = false; });
+        this.switchCameraIfNeeded();
+      }
+    }
   }
 
   async acquireWakeLock() {

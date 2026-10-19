@@ -43,6 +43,7 @@ export class OverlayRenderer {
     this.context = canvas.getContext("2d", { alpha: true });
     this.store = store;
     this.video = video;
+    this.heldCamera = null;
     this.presentation = "full";
     this.suspended = false;
     this.width = 0;
@@ -78,6 +79,16 @@ export class OverlayRenderer {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  holdCamera() {
+    this.heldCamera ??= this.store.state.streamType;
+  }
+
+  releaseCamera() {
+    if (this.heldCamera === null) return;
+    this.heldCamera = null;
+    this.render();
+  }
+
   setPresentation(mode, suspended) {
     if (this.presentation === mode && this.suspended === suspended) return;
     this.presentation = mode;
@@ -93,7 +104,8 @@ export class OverlayRenderer {
     if (!this.width || !this.height) return;
     const state = this.store.state;
     this.lastInputs = overlayInputs(state);
-    const frame = calculateFrameTransform(state, this.width, this.height);
+    const cameraState = this.heldCamera === null ? state : { ...state, streamType: this.heldCamera };
+    const frame = calculateFrameTransform(cameraState, this.width, this.height);
     if (this.video) {
       for (const [key, value] of Object.entries({ left: frame.left, top: frame.top, width: frame.width, height: frame.height })) {
         const css = `${value}px`;

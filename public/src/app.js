@@ -1,12 +1,12 @@
 import { TelemetryStore } from "./core/state.js?v=4";
 import { CerealAdapter } from "./core/telemetry-adapter.js?v=3";
 import { DeviceDiscovery } from "./core/device-discovery.js?v=5";
-import { WebRTCTransport } from "./core/webrtc-transport.js?v=6";
-import { ConnectionManager } from "./core/connection-manager.js?v=6";
+import { WebRTCTransport } from "./core/webrtc-transport.js?v=7";
+import { ConnectionManager } from "./core/connection-manager.js?v=7";
 import { OverlayRenderer } from "./render/overlay-renderer.js";
 import { BUILT_IN_LAYOUTS, WidgetManager } from "./widgets/widget-manager.js?v=3";
 import { DemoFeed } from "./demo.js?v=4";
-import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=12";
+import { APP_BUILD, DiagnosticLog, fullLogQrPages } from "./core/diagnostic-log.js?v=13";
 import { ViewportController } from "./core/viewport-controller.js";
 import { StartupConnection, localNetworkPermission } from "./core/startup-connection.js?v=4";
 import { installFullscreenGesture } from "./core/fullscreen-gesture.js";
@@ -80,7 +80,7 @@ const transport = new WebRTCTransport(elements.video);
 const connection = new ConnectionManager({ store, transport, adapter, discovery });
 const renderer = new OverlayRenderer(elements.canvas, store, elements.video);
 const cameraTransition = new CameraTransition({ root: elements.app, video: elements.video,
-  overlay: elements.canvas, canvas: $("#camera-snapshot"), label: $("#camera-switch-status") });
+  overlay: elements.canvas, canvas: $("#camera-snapshot"), label: $("#camera-switch-status"), renderer });
 const widgets = new WidgetManager({
   layer: elements.widgetLayer,
   toggles: elements.widgetToggles,
@@ -651,7 +651,7 @@ connection.addEventListener("error", (event) => {
 });
 connection.addEventListener("diagnostic", (event) => {
   const detail = event.detail;
-  const interrupted = ["failed", "disconnected", "closed"].includes(detail.peer) || ["channel-error", "channel-close", "recovery-timeout"].includes(detail.kind);
+  const interrupted = ["failed", "disconnected", "closed"].includes(detail.peer) || ["channel-error", "channel-close", "recovery-timeout", "camera-switch-fallback"].includes(detail.kind);
   diagnostics.add(interrupted ? "warn" : "info", "webrtc", `Link ${detail.kind}: ${detail.peer || "unknown"}; ICE ${detail.ice || "unknown"}`, detail);
 });
 connection.addEventListener("progress", (event) => {
